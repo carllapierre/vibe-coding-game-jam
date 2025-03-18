@@ -1,0 +1,16 @@
+{
+  "name": "threejs-fps-sandbox",
+  "version": "1.0.0",
+  "description": "A Three.js FPS sandbox starter project",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx live-server --port=8080 --no-browser",
+    "build": "echo 'No build step needed'"
+  },
+  "dependencies": {
+    "three": "^0.162.0"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
