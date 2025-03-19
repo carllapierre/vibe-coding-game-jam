@@ -4,6 +4,7 @@ import { Character } from './character/Character.js';
 import { FoodProjectile } from './projectiles/FoodProjectile.js';
 import { Inventory } from './inventory/Inventory.js';
 import { Hotbar } from './ui/Hotbar.js';
+import { DebugManager } from './debug/DebugManager.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -29,20 +30,31 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Camera setup
-camera.position.y = 2;
-camera.position.z = 5;
+// Create views containers
+const characterViewContainer = document.createElement('div');
+characterViewContainer.id = 'character-view';
+document.body.appendChild(characterViewContainer);
+
+// Move UI elements into character view
+const crosshair = document.createElement('div');
+crosshair.id = 'crosshair';
+crosshair.textContent = '+';
+characterViewContainer.appendChild(crosshair);
 
 // Initialize inventory system
 const inventory = new Inventory();
 const hotbar = new Hotbar(inventory);
+characterViewContainer.appendChild(hotbar.container);
 
 // Initialize world manager
 const worldManager = new WorldManager(scene);
 let collidableObjects = [];
 
-// Initialize character (we'll update its collidable objects after world loads)
+// Initialize character
 const character = new Character(scene, camera, collidableObjects);
+
+// Initialize debug manager
+const debugManager = new DebugManager(scene, camera, renderer, character);
 
 // Connect inventory to character
 character.inventory = inventory;
@@ -54,9 +66,7 @@ inventory.onSelectionChange = (selectedIndex) => {
 // Load the world
 worldManager.loadWalls().then(() => {
     collidableObjects = worldManager.getCollidableObjects();
-    // Update character's collidable objects reference
     character.collidableObjects = collidableObjects;
-    // Update FoodProjectile's static collidable objects
     FoodProjectile.updateCollidableObjects(collidableObjects);
 });
 
@@ -71,8 +81,15 @@ window.addEventListener('resize', () => {
 function animate() {
     requestAnimationFrame(animate);
 
-    // Update character
-    character.update();
+    if (debugManager.isDebugMode) {
+        // Editor view - hide character view
+        characterViewContainer.style.display = 'none';
+        debugManager.update();
+    } else {
+        // Character view - show character view
+        characterViewContainer.style.display = 'block';
+        character.update();
+    }
 
     // Update all projectiles
     FoodProjectile.updateAll();

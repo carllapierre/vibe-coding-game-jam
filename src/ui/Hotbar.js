@@ -19,6 +19,7 @@ export class Hotbar {
     createHotbarUI() {
         // Create the main hotbar container
         this.container = document.createElement('div');
+        this.container.className = 'hotbar';
         this.container.style.cssText = `
             position: fixed;
             bottom: 20px;
@@ -26,8 +27,8 @@ export class Hotbar {
             transform: translateX(-50%);
             display: flex;
             gap: 4px;
+            padding: 4px;
             background: rgba(0, 0, 0, 0.5);
-            padding: 8px;
             border-radius: 8px;
             z-index: 1000;
         `;
