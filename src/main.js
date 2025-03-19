@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { FoodProjectile } from './projectiles/FoodProjectile.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -67,7 +68,7 @@ const scaleFactor = 3.5;
 // Load wall models
 const wallModels = [
     { 
-        path: 'public/assets/scene/wall.glb',
+        path: '/public/assets/scene/wall.glb',
         positions: [
             { x: -10, y: 0, z: -10, rotationY: 0 },
             { x: -10, y: 0, z: -6, rotationY: 0 },
@@ -78,21 +79,21 @@ const wallModels = [
         ]
     },
     { 
-        path: 'public/assets/scene/wall-window.glb',
+        path: '/public/assets/scene/wall-window.glb',
         positions: [
             { x: -10, y: 0, z: 2, rotationY: 0 },
             { x: 10, y: 0, z: 2, rotationY: Math.PI }
         ]
     },
     { 
-        path: 'public/assets/scene/wall-corner.glb',
+        path: '/public/assets/scene/wall-corner.glb',
         positions: [
             { x: -10, y: 0, z: 6, rotationY: 0 },
             { x: 10, y: 0, z: 6, rotationY: Math.PI/2 }
         ]
     },
     { 
-        path: 'public/assets/scene/wall-door-rotate.glb',
+        path: '/public/assets/scene/wall-door-rotate.glb',
         positions: [
             { x: 0, y: 0, z: -10, rotationY: Math.PI/2 },
             { x: 6, y: 0, z: 6, rotationY: Math.PI }
@@ -165,6 +166,12 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'h') {
         toggleHitboxes();
     }
+
+    // Number keys 1-6 for food selection
+    const num = parseInt(event.key);
+    if (num >= 1 && num <= foodTypes.length) {
+        currentFoodIndex = num - 1;
+    }
 });
 
 document.addEventListener('keyup', (event) => {
@@ -214,6 +221,43 @@ function checkStandingOnObject() {
     const standingDistance = 2.1; // Slightly more than camera height
     return intersects.some(intersect => intersect.distance < standingDistance);
 }
+
+// Add after scene setup
+// Projectile management
+const activeProjectiles = [];
+const foodTypes = [
+    { model: 'tomato.glb', scale: 0.5 },
+    { model: 'apple.glb', scale: 0.5 },
+    { model: 'orange.glb', scale: 0.5 },
+    { model: 'sandwich.glb', scale: 0.5 },
+    { model: 'pizza.glb', scale: 0.3 },
+    { model: 'sushi-salmon.glb', scale: 0.5 }
+];
+let currentFoodIndex = 0;
+
+// Mouse click for throwing
+document.addEventListener('mousedown', (event) => {
+    if (controls.isLocked && event.button === 0) { // Left click
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+        
+        const foodType = foodTypes[currentFoodIndex];
+        const projectile = new FoodProjectile({
+            scene,
+            position: camera.position.clone().add(direction.multiplyScalar(2)),
+            direction: direction,
+            foodModel: foodType.model,
+            scale: foodType.scale,
+            speed: 0.5,
+            gravity: 0.01,
+            arcHeight: 0.2,
+            lifetime: 5000,
+            collidableObjects
+        });
+        
+        activeProjectiles.push(projectile);
+    }
+});
 
 // Animation loop
 function animate() {
@@ -286,6 +330,16 @@ function animate() {
             if (checkCollision(camera.position)) {
                 // If collision, revert to previous position
                 camera.position.copy(potentialPosition);
+            }
+        }
+
+        // Update projectiles
+        for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+            const projectile = activeProjectiles[i];
+            projectile.update();
+            
+            if (!projectile.isActive) {
+                activeProjectiles.splice(i, 1);
             }
         }
     }
