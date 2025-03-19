@@ -1,13 +1,24 @@
-# Three.js FPS Sandbox
+# Food Fight FPS
 
-A simple first-person sandbox environment built with Three.js.
+An exciting multiplayer first-person food fight game where players throw various food items at each other in a chaotic battle arena. Collect power-ups, dodge debuffs, and become the ultimate food fight champion!
+
+## Game Concept
+
+In this multiplayer FPS game, players engage in intense food battles where:
+- Throw different types of food items with unique effects
+- Collect power-ups to enhance your throwing abilities
+- Watch out for debuff food that can slow you down or affect your aim
+- Compete with other players in real-time online matches
+- Use strategy to combine different food effects for maximum impact
 
 ## Features
 
 - First-person camera controls
 - WASD movement
 - Mouse look (click to enable)
-- Basic 3D environment with ground and random boxes
+- Dynamic 3D environment with interactive food items
+- Online multiplayer battles
+- Power-up and debuff system
 - Responsive design
 
 ## Setup
