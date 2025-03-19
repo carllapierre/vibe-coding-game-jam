@@ -84,6 +84,7 @@ document.addEventListener('keydown', (event) => {
     const num = parseInt(event.key);
     if (num >= 1 && num <= foodTypes.length) {
         currentFoodIndex = num - 1;
+        updatePreviewModel();
     }
 });
 
@@ -135,6 +136,34 @@ const foodTypes = [
     { model: 'sushi-salmon.glb', scale: 0.5 }
 ];
 let currentFoodIndex = 0;
+
+// Preview model for currently selected food
+let previewModel = null;
+const loader = new GLTFLoader();
+
+function updatePreviewModel() {
+    // Remove existing preview model if it exists
+    if (previewModel) {
+        scene.remove(previewModel);
+        previewModel.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                child.material.dispose();
+            }
+        });
+    }
+
+    // Load new preview model
+    const foodType = foodTypes[currentFoodIndex];
+    loader.load(`/public/assets/objects/${foodType.model}`, (gltf) => {
+        previewModel = gltf.scene;
+        previewModel.scale.set(foodType.scale, foodType.scale, foodType.scale);
+        scene.add(previewModel);
+    });
+}
+
+// Initialize preview model
+updatePreviewModel();
 
 // Mouse click for throwing
 document.addEventListener('mousedown', (event) => {
@@ -232,6 +261,24 @@ function animate() {
                 // If collision, revert to previous position
                 camera.position.copy(potentialPosition);
             }
+        }
+
+        // Update preview model position
+        if (previewModel) {
+            // Get camera direction and position
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            // Position the preview model in front and slightly to the right of the camera
+            const offset = new THREE.Vector3(0.5, -0.3, -1); // Adjust these values to position the model where you want it
+            offset.applyQuaternion(camera.quaternion);
+            previewModel.position.copy(camera.position).add(offset);
+            
+            // Make the preview model face the same direction as the camera
+            previewModel.quaternion.copy(camera.quaternion);
+            // Add a slight tilt
+            previewModel.rotateX(Math.PI / 6);
+            previewModel.rotateY(Math.PI / 6);
         }
 
         // Update projectiles
