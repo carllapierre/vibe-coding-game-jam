@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { WorldManager } from './world/WorldManager.js';
 import { Character } from './character/Character.js';
 import { FoodProjectile } from './projectiles/FoodProjectile.js';
+import { Inventory } from './inventory/Inventory.js';
+import { Hotbar } from './ui/Hotbar.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -31,12 +33,23 @@ scene.add(ground);
 camera.position.y = 2;
 camera.position.z = 5;
 
+// Initialize inventory system
+const inventory = new Inventory();
+const hotbar = new Hotbar(inventory);
+
 // Initialize world manager
 const worldManager = new WorldManager(scene);
 let collidableObjects = [];
 
 // Initialize character (we'll update its collidable objects after world loads)
 const character = new Character(scene, camera, collidableObjects);
+
+// Connect inventory to character
+character.inventory = inventory;
+inventory.onSelectionChange = (selectedIndex) => {
+    character.currentFoodIndex = selectedIndex;
+    character.updatePreviewModel();
+};
 
 // Load the world
 worldManager.loadWalls().then(() => {

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { PointerLockControls } from './../../node_modules/three/examples/jsm/controls/PointerLockControls.js';
+import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { FoodRegistry } from '../food/FoodRegistry.js';
 
@@ -105,26 +105,75 @@ export class Character {
 
     handleMouseDown(event) {
         if (this.controls.isLocked && event.button === 0 && !this.isThrowAnimating) {
-            const direction = new THREE.Vector3();
-            this.camera.getWorldDirection(direction);
-            
-            const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
-            const projectile = new FoodProjectile({
-                scene: this.scene,
-                position: this.camera.position.clone().add(direction.multiplyScalar(2)),
-                direction: direction,
-                foodModel: foodType.model,
-                scale: foodType.scale,
-                speed: 0.5,
-                gravity: 0.01,
-                arcHeight: 0.2,
-                lifetime: 5000
-            });
-            
-            FoodProjectile.registerProjectile(projectile);
+            // Only throw if we have a valid food type and items in inventory
+            if (this.currentFoodIndex !== null && this.inventory) {
+                const slot = this.inventory.getSelectedSlot();
+                if (slot.item && slot.amount > 0) {
+                    const direction = new THREE.Vector3();
+                    this.camera.getWorldDirection(direction);
+                    
+                    const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
+                    const projectile = new FoodProjectile({
+                        scene: this.scene,
+                        position: this.camera.position.clone().add(direction.multiplyScalar(2)),
+                        direction: direction,
+                        foodModel: foodType.model,
+                        scale: foodType.scale,
+                        speed: 0.5,
+                        gravity: 0.01,
+                        arcHeight: 0.2,
+                        lifetime: 5000
+                    });
+                    
+                    FoodProjectile.registerProjectile(projectile);
 
-            this.isThrowAnimating = true;
-            this.throwAnimationStartTime = Date.now();
+                    this.isThrowAnimating = true;
+                    this.throwAnimationStartTime = Date.now();
+
+                    // Notify inventory that an item was consumed
+                    const consumed = this.inventory.consumeSelectedItem();
+                    if (!consumed) {
+                        // If we couldn't consume (ran out), clear the preview
+                        this.clearPreviewModel();
+                    }
+                }
+            }
+        }
+    }
+
+    clearPreviewModel() {
+        if (this.previewModel) {
+            this.scene.remove(this.previewModel);
+            this.previewModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.geometry.dispose();
+                    child.material.dispose();
+                }
+            });
+            this.previewModel = null;
+        }
+    }
+
+    updatePreviewModel() {
+        this.clearPreviewModel();
+
+        // Only show preview if we have a valid food index
+        if (this.currentFoodIndex !== null) {
+            const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
+            this.loader.load(`/public/assets/objects/${foodType.model}`, (gltf) => {
+                this.previewModel = gltf.scene;
+                const baseScale = foodType.scale * 1.5;
+                this.previewModel.scale.set(0.001, 0.001, 0.001);
+                this.previewModel.baseScale = baseScale;
+                this.scene.add(this.previewModel);
+                
+                this.previewGrowStartTime = Date.now();
+                
+                const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
+                handTipOffset.applyQuaternion(this.camera.quaternion);
+                const spawnPosition = this.camera.position.clone().add(handTipOffset);
+                this.createSpawnParticles(spawnPosition);
+            });
         }
     }
 
@@ -188,34 +237,6 @@ export class Character {
         };
 
         animateParticles();
-    }
-
-    updatePreviewModel() {
-        if (this.previewModel) {
-            this.scene.remove(this.previewModel);
-            this.previewModel.traverse((child) => {
-                if (child.isMesh) {
-                    child.geometry.dispose();
-                    child.material.dispose();
-                }
-            });
-        }
-
-        const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
-        this.loader.load(`/public/assets/objects/${foodType.model}`, (gltf) => {
-            this.previewModel = gltf.scene;
-            const baseScale = foodType.scale * 1.5;
-            this.previewModel.scale.set(0.001, 0.001, 0.001);
-            this.previewModel.baseScale = baseScale;
-            this.scene.add(this.previewModel);
-            
-            this.previewGrowStartTime = Date.now();
-            
-            const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
-            handTipOffset.applyQuaternion(this.camera.quaternion);
-            const spawnPosition = this.camera.position.clone().add(handTipOffset);
-            this.createSpawnParticles(spawnPosition);
-        });
     }
 
     checkCollision(nextPosition) {
@@ -306,7 +327,7 @@ export class Character {
     }
 
     updateHandAndPreviewModel() {
-        if (!this.handMesh || !this.previewModel) return;
+        if (!this.handMesh) return;  // Remove previewModel check since we might not have one
 
         const direction = new THREE.Vector3();
         this.camera.getWorldDirection(direction);
@@ -335,31 +356,37 @@ export class Character {
             
             if (progress === 1) {
                 this.isThrowAnimating = false;
-                this.updatePreviewModel();
-            }
-        } else {
-            if (this.previewModel) {
-                this.previewModel.visible = true;
-                const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
-                handTipOffset.applyQuaternion(this.camera.quaternion);
-                this.previewModel.position.copy(this.camera.position).add(handTipOffset);
-                
-                this.previewModel.quaternion.copy(this.camera.quaternion);
-                this.previewModel.rotateX(Math.PI / 4);
-                this.previewModel.rotateY(Math.PI / 4);
-
-                const growElapsed = Date.now() - this.previewGrowStartTime;
-                if (growElapsed < this.growDuration) {
-                    const growProgress = growElapsed / this.growDuration;
-                    const scale = this.previewModel.baseScale * (1 - Math.pow(1 - growProgress, 3));
-                    this.previewModel.scale.set(scale, scale, scale);
-                } else {
-                    this.previewModel.scale.set(
-                        this.previewModel.baseScale,
-                        this.previewModel.baseScale,
-                        this.previewModel.baseScale
-                    );
+                if (this.inventory) {
+                    // Check if we still have items in the current slot
+                    const currentSlot = this.inventory.getSelectedSlot();
+                    if (currentSlot.item) {
+                        this.updatePreviewModel();
+                    } else {
+                        this.clearPreviewModel();
+                    }
                 }
+            }
+        } else if (this.previewModel) {
+            this.previewModel.visible = true;
+            const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
+            handTipOffset.applyQuaternion(this.camera.quaternion);
+            this.previewModel.position.copy(this.camera.position).add(handTipOffset);
+            
+            this.previewModel.quaternion.copy(this.camera.quaternion);
+            this.previewModel.rotateX(Math.PI / 4);
+            this.previewModel.rotateY(Math.PI / 4);
+
+            const growElapsed = Date.now() - this.previewGrowStartTime;
+            if (growElapsed < this.growDuration) {
+                const growProgress = growElapsed / this.growDuration;
+                const scale = this.previewModel.baseScale * (1 - Math.pow(1 - growProgress, 3));
+                this.previewModel.scale.set(scale, scale, scale);
+            } else {
+                this.previewModel.scale.set(
+                    this.previewModel.baseScale,
+                    this.previewModel.baseScale,
+                    this.previewModel.baseScale
+                );
             }
         }
     }
