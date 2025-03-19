@@ -1,0 +1,40 @@
+{
+    "walls": [
+        {
+            "model": "wall.glb",
+            "instances": [
+                { "x": -10, "y": 0, "z": -10, "rotationY": 0 },
+                { "x": -10, "y": 0, "z": -6, "rotationY": 0 },
+                { "x": -10, "y": 0, "z": -2, "rotationY": 0 },
+                { "x": 10, "y": 0, "z": -10, "rotationY": 3.141592653589793 },
+                { "x": 10, "y": 0, "z": -6, "rotationY": 3.141592653589793 },
+                { "x": 10, "y": 0, "z": -2, "rotationY": 3.141592653589793 }
+            ]
+        },
+        {
+            "model": "wall-window.glb",
+            "instances": [
+                { "x": -10, "y": 0, "z": 2, "rotationY": 0 },
+                { "x": 10, "y": 0, "z": 2, "rotationY": 3.141592653589793 }
+            ]
+        },
+        {
+            "model": "wall-corner.glb",
+            "instances": [
+                { "x": -10, "y": 0, "z": 6, "rotationY": 0 },
+                { "x": 10, "y": 0, "z": 6, "rotationY": 1.5707963267948966 }
+            ]
+        },
+        {
+            "model": "wall-door-rotate.glb",
+            "instances": [
+                { "x": 0, "y": 0, "z": -10, "rotationY": 1.5707963267948966 },
+                { "x": 6, "y": 0, "z": 6, "rotationY": 3.141592653589793 }
+            ]
+        }
+    ],
+    "settings": {
+        "scaleFactor": 3.5,
+        "modelBasePath": "/public/assets/scene/"
+    }
+} 

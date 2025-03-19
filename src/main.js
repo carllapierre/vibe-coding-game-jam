@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { FoodProjectile } from './projectiles/FoodProjectile.js';
+import { WorldManager } from './world/WorldManager.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -47,108 +48,20 @@ const gravity = 0.01;
 const jumpForce = 0.25;
 let velocity = new THREE.Vector3(0, 0, 0);
 let canJump = true;
-
-// Collection of collidable objects
-const collidableObjects = [];
-const boundingBoxHelpers = [];
 const playerRadius = 0.5;
 
-// Show hitboxes toggle
-let showHitboxes = true;
+// Initialize world manager
+const worldManager = new WorldManager(scene);
+let collidableObjects = [];
+
 
 // Initialize controls
 const controls = new PointerLockControls(camera, document.body);
 
-// GLTF loader for wall models
-const loader = new GLTFLoader();
 
-// Scaling factor for models
-const scaleFactor = 3.5;
-
-// Load wall models
-const wallModels = [
-    { 
-        path: '/public/assets/scene/wall.glb',
-        positions: [
-            { x: -10, y: 0, z: -10, rotationY: 0 },
-            { x: -10, y: 0, z: -6, rotationY: 0 },
-            { x: -10, y: 0, z: -2, rotationY: 0 },
-            { x: 10, y: 0, z: -10, rotationY: Math.PI },
-            { x: 10, y: 0, z: -6, rotationY: Math.PI },
-            { x: 10, y: 0, z: -2, rotationY: Math.PI }
-        ]
-    },
-    { 
-        path: '/public/assets/scene/wall-window.glb',
-        positions: [
-            { x: -10, y: 0, z: 2, rotationY: 0 },
-            { x: 10, y: 0, z: 2, rotationY: Math.PI }
-        ]
-    },
-    { 
-        path: '/public/assets/scene/wall-corner.glb',
-        positions: [
-            { x: -10, y: 0, z: 6, rotationY: 0 },
-            { x: 10, y: 0, z: 6, rotationY: Math.PI/2 }
-        ]
-    },
-    { 
-        path: '/public/assets/scene/wall-door-rotate.glb',
-        positions: [
-            { x: 0, y: 0, z: -10, rotationY: Math.PI/2 },
-            { x: 6, y: 0, z: 6, rotationY: Math.PI }
-        ]
-    }
-];
-
-// Debug helper for visualizing bounding boxes
-function createBoundingBoxHelper(object) {
-    const box = new THREE.Box3().setFromObject(object);
-    const helper = new THREE.Box3Helper(box, 0xff0000);
-    helper.visible = showHitboxes;
-    scene.add(helper);
-    boundingBoxHelpers.push(helper);
-    return { box, helper };
-}
-
-// Toggle hitbox visibility
-function toggleHitboxes() {
-    showHitboxes = !showHitboxes;
-    boundingBoxHelpers.forEach(helper => {
-        helper.visible = showHitboxes;
-    });
-}
-
-// Load all the wall models
-wallModels.forEach(model => {
-    loader.load(model.path, (gltf) => {
-        // Create instances at each position
-        model.positions.forEach(pos => {
-            const instance = gltf.scene.clone();
-            
-            // Scale the model
-            instance.scale.set(scaleFactor, scaleFactor, scaleFactor);
-            
-            // Position and rotate the wall
-            instance.position.set(pos.x, pos.y, pos.z);
-            instance.rotation.y = pos.rotationY;
-            
-            // Add to the scene
-            scene.add(instance);
-            
-            // Update matrices for proper bounding box calculation
-            instance.updateMatrixWorld(true);
-            
-            // Create a bounding box for collision detection
-            const boxInfo = createBoundingBoxHelper(instance);
-            collidableObjects.push({
-                object: instance,
-                box: boxInfo.box
-            });
-        });
-    }, undefined, (error) => {
-        console.error('Error loading model:', error);
-    });
+// Load the world
+worldManager.loadWalls().then(() => {
+    collidableObjects = worldManager.getCollidableObjects();
 });
 
 // Click to start
@@ -164,7 +77,7 @@ document.addEventListener('keydown', (event) => {
     
     // Toggle hitboxes on 'h' key press
     if (event.key === 'h') {
-        toggleHitboxes();
+        worldManager.toggleHitboxes();
     }
 
     // Number keys 1-6 for food selection
@@ -189,36 +102,24 @@ window.addEventListener('resize', () => {
 
 // Collision detection
 function checkCollision(nextPosition) {
-    // Create a sphere representing the player
     const playerSphere = new THREE.Sphere(nextPosition, playerRadius);
-    
-    // Check for collision with each object
-    for (const obj of collidableObjects) {
-        if (obj.box.intersectsSphere(playerSphere)) {
-            return true;
-        }
-    }
-    
-    return false;
+    return collidableObjects.some(obj => obj.box.intersectsSphere(playerSphere));
 }
 
 // Check if the player is standing on top of an object
 function checkStandingOnObject() {
-    // Create a ray pointing downward from the player
     const raycaster = new THREE.Raycaster();
     const rayOrigin = camera.position.clone();
     const rayDirection = new THREE.Vector3(0, -1, 0);
     raycaster.set(rayOrigin, rayDirection);
     
-    // Check if ray intersects with any collidable object within the standing distance
     const intersects = [];
-    for (const obj of collidableObjects) {
+    collidableObjects.forEach(obj => {
         const intersectResults = raycaster.intersectObject(obj.object, true);
         intersects.push(...intersectResults);
-    }
+    });
     
-    // If there's an intersection close enough, player is standing on an object
-    const standingDistance = 2.1; // Slightly more than camera height
+    const standingDistance = 2.1;
     return intersects.some(intersect => intersect.distance < standingDistance);
 }
 
