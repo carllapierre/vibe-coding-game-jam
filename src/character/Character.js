@@ -3,6 +3,7 @@ import { PointerLockControls } from './../../node_modules/three/examples/jsm/con
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { FoodRegistry } from '../food/FoodRegistry.js';
+import { assetPath } from '../utils/pathHelper.js';
 
 export class Character {
     constructor(scene, camera, collidableObjects) {
@@ -38,6 +39,25 @@ export class Character {
         
         // Event listeners
         this.setupEventListeners();
+
+        // Add a debug collision sphere
+        const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const sphereMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.3
+        });
+        this.collisionSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        this.scene.add(this.collisionSphere);
+        
+        // Initialize movement state
+        this.movementState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            jump: false
+        };
     }
 
     setupHand() {
@@ -160,7 +180,7 @@ export class Character {
         // Only show preview if we have a valid food index
         if (this.currentFoodIndex !== null) {
             const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
-            this.loader.load(`/public/assets/objects/${foodType.model}`, (gltf) => {
+            this.loader.load(assetPath(`objects/${foodType.model}`), (gltf) => {
                 this.previewModel = gltf.scene;
                 const baseScale = foodType.scale * 1.5;
                 this.previewModel.scale.set(0.001, 0.001, 0.001);
@@ -261,6 +281,9 @@ export class Character {
     }
 
     update() {
+        // Update collision sphere position
+        this.collisionSphere.position.copy(this.camera.position);
+        
         if (!this.controls.isLocked) return;
 
         this.updateMovement();

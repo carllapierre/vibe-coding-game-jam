@@ -1,3 +1,6 @@
+
+
+
 {
     "walls": [
         {
@@ -31,6 +34,22 @@
                 { "x": 0, "y": 0, "z": -10, "rotationY": 1.5707963267948966 },
                 { "x": 6, "y": 0, "z": 6, "rotationY": 3.141592653589793 }
             ]
+        }
+    ],
+    "spawners": [
+        {
+            "type": "item",
+            "position": { "x": 0, "y": 1, "z": 0 },
+            "itemIds": ["turkey", "burger-cheese-double", "pizza"],
+            "cooldown": 5000,
+            "active": true
+        },
+        {
+            "type": "item",
+            "position": { "x": 5, "y": 1, "z": -5 },
+            "itemIds": ["loaf-baguette", "meat-ribs", "wine-red"],
+            "cooldown": 8000,
+            "active": true
         }
     ],
     "settings": {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+import { assetPath } from '../utils/pathHelper.js';
 
 export class FoodProjectile {
     static activeProjectiles = [];
@@ -43,7 +44,7 @@ export class FoodProjectile {
         
         // Load the model
         const loader = new GLTFLoader();
-        loader.load(`/public/assets/objects/${foodModel}`, (gltf) => {
+        loader.load(assetPath(`objects/${foodModel}`), (gltf) => {
             this.model = gltf.scene;
             this.model.scale.set(scale, scale, scale);
             this.model.position.copy(position);

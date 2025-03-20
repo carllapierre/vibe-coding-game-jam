@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
-
+import { assetPath } from '../utils/pathHelper.js';
 export class Hotbar {
     constructor(inventory) {
         this.inventory = inventory;
@@ -92,7 +92,7 @@ export class Hotbar {
 
             // Only load model if slot has an item
             if (slotData.item) {
-                loader.load(`/public/assets/objects/${slotData.item.model}`, (gltf) => {
+                loader.load(assetPath(`objects/${slotData.item.model}`), (gltf) => {
                     const model = gltf.scene;
                     model.scale.multiplyScalar(slotData.item.scale * 3);
                     // Center the model
