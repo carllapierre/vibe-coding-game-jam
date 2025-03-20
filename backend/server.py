@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-WORLD_DATA_PATH = 'public/data/world.json'
+WORLD_DATA_PATH = './data/world.json'
 
 @app.route('/api/world', methods=['GET'])
 def get_world():
