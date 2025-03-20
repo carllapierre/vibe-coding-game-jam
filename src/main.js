@@ -110,8 +110,9 @@ let collidableObjects = [];
 // Initialize character
 const character = new Character(scene, camera, collidableObjects);
 
-// Initialize debug manager
+// Create debug manager
 const debugManager = new DebugManager(scene, camera, renderer, character);
+debugManager.setWorldManager(worldManager);
 
 // Connect inventory to character
 character.inventory = inventory;

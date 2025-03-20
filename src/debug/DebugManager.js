@@ -8,6 +8,7 @@ export class DebugManager {
         this.renderer = renderer;
         this.character = character;
         this.isDebugMode = false;
+        this.worldManager = null;
         
         // Store original camera position and rotation
         this.originalCameraPosition = new THREE.Vector3();
@@ -111,6 +112,10 @@ export class DebugManager {
         }
     }
     
+    setWorldManager(worldManager) {
+        this.worldManager = worldManager;
+    }
+
     toggleDebugMode() {
         this.isDebugMode = !this.isDebugMode;
         
@@ -122,24 +127,28 @@ export class DebugManager {
             // Enable orbit controls
             this.orbitControls.enabled = true;
             
-            // Show debug overlay
-            this.debugOverlay.style.display = 'block';
-
-            // Disable character
-            this.character.setEnabled(false);
+            // Disable character controls
+            if (this.character) {
+                this.character.enabled = false;
+                this.character.controls.unlock();
+            }
         } else {
-            // Restore original camera state
+            // Restore camera state
             this.camera.position.copy(this.originalCameraPosition);
             this.camera.rotation.copy(this.originalCameraRotation);
             
             // Disable orbit controls
             this.orbitControls.enabled = false;
             
-            // Hide debug overlay
-            this.debugOverlay.style.display = 'none';
+            // Enable character controls
+            if (this.character) {
+                this.character.enabled = true;
+            }
+        }
 
-            // Re-enable character
-            this.character.setEnabled(true);
+        // Toggle hitbox visibility
+        if (this.worldManager) {
+            this.worldManager.toggleHitboxes(this.isDebugMode);
         }
     }
     

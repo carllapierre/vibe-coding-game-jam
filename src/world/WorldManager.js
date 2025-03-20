@@ -9,7 +9,7 @@ export class WorldManager {
         this.worldData = null;
         this.collidableObjects = [];
         this.boundingBoxHelpers = [];
-        this.showHitboxes = true;
+        this.showHitboxes = false;
         this.spawners = [];
         
         // Cache for model loading
@@ -51,14 +51,14 @@ export class WorldManager {
     createBoundingBoxHelper(object) {
         const box = new THREE.Box3().setFromObject(object);
         const helper = new THREE.Box3Helper(box, 0xff0000);
-        helper.visible = this.showHitboxes;
+        helper.visible = false;
         this.scene.add(helper);
         this.boundingBoxHelpers.push(helper);
         return { box, helper };
     }
 
-    toggleHitboxes() {
-        this.showHitboxes = !this.showHitboxes;
+    toggleHitboxes(isDebugMode) {
+        this.showHitboxes = isDebugMode;
         this.boundingBoxHelpers.forEach(helper => {
             helper.visible = this.showHitboxes;
         });
@@ -104,12 +104,22 @@ export class WorldManager {
                 // Update matrices for proper bounding box calculation
                 wallInstance.updateMatrixWorld(true);
                 
-                // Create a bounding box for collision detection
+                // Create a bounding box for debug visualization only
                 const boxInfo = this.createBoundingBoxHelper(wallInstance);
+                
+                // Store the wall instance and its collision data
                 this.collidableObjects.push({
                     object: wallInstance,
                     box: boxInfo.box,
+                    meshes: [], // Array to store actual meshes for collision
                     config: { ...instance, model: wallData.model }
+                });
+                
+                // Collect all meshes from the wall instance for precise collision
+                wallInstance.traverse((child) => {
+                    if (child.isMesh) {
+                        this.collidableObjects[this.collidableObjects.length - 1].meshes.push(child);
+                    }
                 });
             });
         });

@@ -134,7 +134,22 @@ export class FoodProjectile {
         
         // Check for collisions with static collidable objects
         const projectileSphere = new THREE.Sphere(nextPosition, 0.2 * this.scale);
-        const hasCollision = FoodProjectile.collidableObjects.some(obj => obj.box.intersectsSphere(projectileSphere));
+        const raycaster = new THREE.Raycaster();
+        
+        // Check collision with each collidable object's meshes
+        const hasCollision = FoodProjectile.collidableObjects.some(obj => {
+            // First do a quick bounding box check
+            if (!obj.box.intersectsSphere(projectileSphere)) {
+                return false;
+            }
+            
+            // If the bounding box intersects, do precise mesh collision detection
+            return obj.meshes.some(mesh => {
+                raycaster.set(this.model.position, this.velocity.clone().normalize());
+                const intersects = raycaster.intersectObject(mesh);
+                return intersects.some(intersect => intersect.distance < this.velocity.length());
+            });
+        });
 
         if (hasCollision) {
             // Create particle effect at the current position before destroying

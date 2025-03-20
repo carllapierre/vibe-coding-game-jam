@@ -287,7 +287,36 @@ export class Character {
 
     checkCollision(nextPosition) {
         const playerSphere = new THREE.Sphere(nextPosition, this.playerRadius);
-        return this.collidableObjects.some(obj => obj.box.intersectsSphere(playerSphere));
+        const raycaster = new THREE.Raycaster();
+        
+        // Check collision with each collidable object's meshes
+        return this.collidableObjects.some(obj => {
+            // First do a quick bounding box check
+            if (!obj.box.intersectsSphere(playerSphere)) {
+                return false;
+            }
+            
+            // If the bounding box intersects, do precise mesh collision detection
+            return obj.meshes.some(mesh => {
+                // Cast rays in multiple directions from the player's position
+                const directions = [
+                    new THREE.Vector3(1, 0, 0),
+                    new THREE.Vector3(-1, 0, 0),
+                    new THREE.Vector3(0, 0, 1),
+                    new THREE.Vector3(0, 0, -1),
+                    new THREE.Vector3(1, 0, 1).normalize(),
+                    new THREE.Vector3(1, 0, -1).normalize(),
+                    new THREE.Vector3(-1, 0, 1).normalize(),
+                    new THREE.Vector3(-1, 0, -1).normalize()
+                ];
+                
+                return directions.some(dir => {
+                    raycaster.set(nextPosition, dir);
+                    const intersects = raycaster.intersectObject(mesh);
+                    return intersects.some(intersect => intersect.distance < this.playerRadius);
+                });
+            });
+        });
     }
 
     checkStandingOnObject() {
