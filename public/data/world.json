@@ -1,106 +1,297 @@
 {
-    "walls": [
-        {
-            "model": "wall.glb",
-            "instances": [
-                { "x": -10, "y": 0, "z": -10, "rotationY": 0 },
-                { "x": -10, "y": 0, "z": -6, "rotationY": 0 },
-                { "x": -10, "y": 0, "z": -2, "rotationY": 0 },
-                { "x": 10, "y": 0, "z": -10, "rotationY": 3.141592653589793 },
-                { "x": 10, "y": 0, "z": -6, "rotationY": 3.141592653589793 },
-                { "x": 10, "y": 0, "z": -2, "rotationY": 3.141592653589793 }
-            ]
-        },
-        {
-            "model": "wall-window.glb",
-            "instances": [
-                { "x": -10, "y": 0, "z": 2, "rotationY": 0 },
-                { "x": 10, "y": 0, "z": 2, "rotationY": 3.141592653589793 }
-            ]
-        },
-        {
-            "model": "wall-corner.glb",
-            "instances": [
-                { "x": -10, "y": 0, "z": 6, "rotationY": 0 },
-                { "x": 10, "y": 0, "z": 6, "rotationY": 1.5707963267948966 }
-            ]
-        },
-        {
-            "model": "wall-door-rotate.glb",
-            "instances": [
-                { "x": 0, "y": 0, "z": -10, "rotationY": 1.5707963267948966 },
-                { "x": 6, "y": 0, "z": 6, "rotationY": 3.141592653589793 }
-            ]
-        }
-    ],
+    "settings": {
+        "modelBasePath": "/public/assets/scene/",
+        "scaleFactor": 3.5
+    },
     "spawners": [
         {
-            "type": "item",
-            "position": { "x": -8, "y": 1, "z": -8 },
-            "itemIds": ["turkey", "whole-ham", "meat-ribs", "meat-cooked", "meat-sausage"],
-            "quantities": [2, 1, 2, 3, 2],
+            "active": true,
             "cooldown": 7000,
-            "active": true
+            "itemIds": [
+                "turkey",
+                "whole-ham",
+                "meat-ribs",
+                "meat-cooked",
+                "meat-sausage"
+            ],
+            "position": {
+                "x": -8,
+                "y": 1,
+                "z": -8
+            },
+            "quantities": [
+                2,
+                1,
+                2,
+                3,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": -8, "y": 1, "z": 0 },
-            "itemIds": ["loaf-baguette", "loaf-round", "muffin", "pancakes", "waffle"],
-            "quantities": [3, 2, 4, 2, 2],
+            "active": true,
             "cooldown": 6000,
-            "active": true
+            "itemIds": [
+                "loaf-baguette",
+                "loaf-round",
+                "muffin",
+                "pancakes",
+                "waffle"
+            ],
+            "position": {
+                "x": -8,
+                "y": 1,
+                "z": 0
+            },
+            "quantities": [
+                3,
+                2,
+                4,
+                2,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": 8, "y": 1, "z": -8 },
-            "itemIds": ["pizza", "sandwich", "salad", "sub", "taco"],
-            "quantities": [1, 2, 2, 1, 2],
+            "active": true,
             "cooldown": 8000,
-            "active": true
+            "itemIds": [
+                "pizza",
+                "sandwich",
+                "salad",
+                "sub",
+                "taco"
+            ],
+            "position": {
+                "x": 8,
+                "y": 1,
+                "z": -8
+            },
+            "quantities": [
+                1,
+                2,
+                2,
+                1,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": 8, "y": 1, "z": 0 },
-            "itemIds": ["sushi-salmon", "maki-roe", "maki-salmon", "mussel", "rice-ball"],
-            "quantities": [2, 3, 3, 4, 2],
+            "active": true,
             "cooldown": 6000,
-            "active": true
+            "itemIds": [
+                "sushi-salmon",
+                "maki-roe",
+                "maki-salmon",
+                "mussel",
+                "rice-ball"
+            ],
+            "position": {
+                "x": 8,
+                "y": 1,
+                "z": 0
+            },
+            "quantities": [
+                2,
+                3,
+                3,
+                4,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": 0, "y": 1, "z": -8 },
-            "itemIds": ["watermelon", "strawberry", "pineapple", "orange", "pear"],
-            "quantities": [1, 4, 2, 3, 3],
+            "active": true,
             "cooldown": 5000,
-            "active": true
+            "itemIds": [
+                "watermelon",
+                "strawberry",
+                "pineapple",
+                "orange",
+                "pear"
+            ],
+            "position": {
+                "x": 0,
+                "y": 1,
+                "z": -8
+            },
+            "quantities": [
+                1,
+                4,
+                2,
+                3,
+                3
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": 0, "y": 1, "z": 4 },
-            "itemIds": ["ice-cream", "sundae", "pudding", "popsicle", "whipped-cream"],
-            "quantities": [2, 1, 2, 3, 2],
+            "active": true,
             "cooldown": 7000,
-            "active": true
+            "itemIds": [
+                "ice-cream",
+                "sundae",
+                "pudding",
+                "popsicle",
+                "whipped-cream"
+            ],
+            "position": {
+                "x": 0,
+                "y": 1,
+                "z": 4
+            },
+            "quantities": [
+                2,
+                1,
+                2,
+                3,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": -4, "y": 1, "z": 4 },
-            "itemIds": ["wine-red", "wine-white", "soda-bottle", "soda-can", "soda-glass"],
-            "quantities": [1, 1, 2, 3, 2],
+            "active": true,
             "cooldown": 9000,
-            "active": true
+            "itemIds": [
+                "wine-red",
+                "wine-white",
+                "soda-bottle",
+                "soda-can",
+                "soda-glass"
+            ],
+            "position": {
+                "x": -4,
+                "y": 1,
+                "z": 4
+            },
+            "quantities": [
+                1,
+                1,
+                2,
+                3,
+                2
+            ],
+            "type": "item"
         },
         {
-            "type": "item",
-            "position": { "x": 4, "y": 1, "z": 4 },
-            "itemIds": ["carrot", "cup-coffee"],
-            "quantities": [3, 4, 3, 2, 4],
+            "active": true,
             "cooldown": 5000,
-            "active": true
+            "itemIds": [
+                "carrot",
+                "cup-coffee"
+            ],
+            "position": {
+                "x": 4,
+                "y": 1,
+                "z": 4
+            },
+            "quantities": [
+                3,
+                4,
+                3,
+                2,
+                4
+            ],
+            "type": "item"
         }
     ],
-    "settings": {
-        "scaleFactor": 3.5,
-        "modelBasePath": "/public/assets/scene/"
-    }
-} 
+    "walls": [
+        {
+            "instances": [
+                {
+                    "rotationY": 0,
+                    "x": -10,
+                    "y": 0,
+                    "z": -10
+                },
+                {
+                    "rotationY": 0,
+                    "x": -10,
+                    "y": 0,
+                    "z": -6
+                },
+                {
+                    "rotationY": 0,
+                    "x": -10,
+                    "y": 0,
+                    "z": -2
+                },
+                {
+                    "rotationY": 3.141592653589793,
+                    "x": 10,
+                    "y": 0,
+                    "z": -10
+                },
+                {
+                    "rotationY": 3.141592653589793,
+                    "x": 10,
+                    "y": 0,
+                    "z": -6
+                },
+                {
+                    "rotationY": 3.141592653589793,
+                    "x": 10,
+                    "y": 0,
+                    "z": -2
+                }
+            ],
+            "model": "wall.glb"
+        },
+        {
+            "instances": [
+                {
+                    "rotationY": 0,
+                    "x": -10,
+                    "y": 0,
+                    "z": 2
+                },
+                {
+                    "rotationY": 3.141592653589793,
+                    "scaleX": 1.591320858668073,
+                    "scaleY": 1.1113857862247463,
+                    "scaleZ": 2.4939475083128166,
+                    "x": 22.28086838221352,
+                    "y": 0.257926159673878,
+                    "z": -15.670130183076232
+                }
+            ],
+            "model": "wall-window.glb"
+        },
+        {
+            "instances": [
+                {
+                    "rotationY": 0,
+                    "x": -10,
+                    "y": 0,
+                    "z": 6
+                },
+                {
+                    "x": 9.999999999999996,
+                    "y": 0,
+                    "z": 42.69723125924813,
+                    "rotationY": -1.5237481292414485,
+                    "scaleX": 1.1128208579715877,
+                    "scaleY": 1.1128208579715877,
+                    "scaleZ": 1.1128208579715877
+                }
+            ],
+            "model": "wall-corner.glb"
+        },
+        {
+            "instances": [
+                {
+                    "rotationY": 1.5707963267948966,
+                    "x": 0,
+                    "y": 0,
+                    "z": -10
+                },
+                {
+                    "rotationY": 3.141592653589793,
+                    "x": 6,
+                    "y": 6.109439669051669,
+                    "z": 6
+                }
+            ],
+            "model": "wall-door-rotate.glb"
+        }
+    ]
+}

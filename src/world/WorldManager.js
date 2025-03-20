@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { ItemSpawner } from '../spawners/ItemSpawner.js';
+import worldManagerService from '../services/WorldManagerService.js';
 
 export class WorldManager {
     constructor(scene) {
@@ -17,51 +18,95 @@ export class WorldManager {
     }
 
     async loadWorld() {
-        const response = await fetch('/public/data/world.json');
-        const worldData = await response.json();
-        
-        // Store world data for other initialization steps
-        this.worldData = worldData;
-        
-        // Return the promise so we can chain initialization steps
-        return worldData;
-    }
-
-    async saveWorldData() {
         try {
-            const response = await fetch('/public/data/world.json', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(this.worldData, null, 4)
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to save world data');
-            }
-            
-            return true;
+            const worldData = await worldManagerService.getWorldData();
+            this.worldData = worldData;
+            return worldData;
         } catch (error) {
-            console.error('Error saving world data:', error);
+            console.error('Failed to load world:', error);
             throw error;
         }
     }
 
-    createBoundingBoxHelper(object) {
-        const box = new THREE.Box3().setFromObject(object);
-        const helper = new THREE.Box3Helper(box, 0xff0000);
-        helper.visible = false;
-        this.scene.add(helper);
-        this.boundingBoxHelpers.push(helper);
-        return { box, helper };
+    async saveWorldData() {
+        try {
+            const success = await worldManagerService.saveWorldData(this.worldData);
+            if (success) {
+                console.log('World data saved successfully');
+            }
+            return success;
+        } catch (error) {
+            console.error('Failed to save world:', error);
+            throw error;
+        }
     }
 
-    toggleHitboxes(isDebugMode) {
-        this.showHitboxes = isDebugMode;
-        this.boundingBoxHelpers.forEach(helper => {
-            helper.visible = this.showHitboxes;
+    update(character) {
+        // Update all spawners
+        this.spawners.forEach((spawner, index) => {
+            if (!spawner) {
+                console.warn(`Invalid spawner at index ${index}`);
+                return;
+            }
+            
+            try {
+                spawner.update();
+                
+                // Check for item collection if character is provided
+                if (character) {
+                    spawner.checkCollection(character);
+                }
+            } catch (error) {
+                console.error(`Error updating spawner ${index}:`, error);
+            }
         });
+    }
+
+    getCollidableObjects() {
+        return this.collidableObjects;
+    }
+
+    toggleHitboxes(show) {
+        this.showHitboxes = show;
+        this.boundingBoxHelpers.forEach(helper => {
+            helper.visible = show;
+        });
+    }
+
+    async updateWallInstance(modelName, instanceIndex, position, rotation, scale) {
+        if (!this.worldData || !this.worldData.walls) return false;
+
+        const wallData = this.worldData.walls.find(wall => wall.model === modelName);
+        if (!wallData || !wallData.instances[instanceIndex]) return false;
+
+        // Update the instance data
+        // When saving, divide by scaleFactor to get the actual scale values
+        const scaleFactor = this.worldData.settings.scaleFactor;
+        wallData.instances[instanceIndex] = {
+            x: position.x,
+            y: position.y,
+            z: position.z,
+            rotationY: rotation.y,
+            scaleX: scale ? scale.x / scaleFactor : 1,
+            scaleY: scale ? scale.y / scaleFactor : 1,
+            scaleZ: scale ? scale.z / scaleFactor : 1
+        };
+
+        console.log(`Saving normalized scale for ${modelName}[${instanceIndex}]:`, {
+            x: wallData.instances[instanceIndex].scaleX,
+            y: wallData.instances[instanceIndex].scaleY,
+            z: wallData.instances[instanceIndex].scaleZ
+        });
+
+        // Save the changes to the server
+        try {
+            await this.saveWorldData();
+            console.log(`Updated and saved wall instance: ${modelName} [${instanceIndex}]`);
+            return true;
+        } catch (error) {
+            console.error('Failed to save wall instance update:', error);
+            return false;
+        }
     }
 
     async loadModel(path) {
@@ -79,6 +124,11 @@ export class WorldManager {
         });
     }
 
+    createBoundingBoxHelper(object) {
+        const box = new THREE.Box3().setFromObject(object);
+        return { box };
+    }
+
     async loadWalls() {
         if (!this.worldData) {
             await this.loadWorld();
@@ -89,30 +139,54 @@ export class WorldManager {
             const gltf = await this.loadModel(modelPath);
             
             // Create instances
-            wallData.instances.forEach(instance => {
+            wallData.instances.forEach((instance, index) => {
                 const wallInstance = gltf.scene.clone();
-                // Apply position without scaling it (the scale factor will be applied to the model itself)
+                
+                // Apply position and rotation
                 wallInstance.position.set(
                     instance.x,
                     instance.y,
                     instance.z
                 );
                 wallInstance.rotation.y = instance.rotationY;
-                wallInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor);
+
+                // Apply scale - use saved scale values if they exist, otherwise use default scale
+                if (instance.scaleX !== undefined && instance.scaleY !== undefined && instance.scaleZ !== undefined) {
+                    console.log(`Applying saved scale for ${wallData.model}[${index}]:`, instance.scaleX, instance.scaleY, instance.scaleZ);
+                    wallInstance.scale.set(
+                        instance.scaleX * this.worldData.settings.scaleFactor,
+                        instance.scaleY * this.worldData.settings.scaleFactor,
+                        instance.scaleZ * this.worldData.settings.scaleFactor
+                    );
+                } else {
+                    console.log(`No saved scale for ${wallData.model}[${index}], using default`);
+                    wallInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor);
+                }
+
+                // Store model information for transform saving
+                wallInstance.userData.model = wallData.model;
+                wallInstance.userData.instanceIndex = index;
+
                 this.scene.add(wallInstance);
                 
                 // Update matrices for proper bounding box calculation
                 wallInstance.updateMatrixWorld(true);
                 
-                // Create a bounding box for debug visualization only
+                // Create a bounding box for collision detection
                 const boxInfo = this.createBoundingBoxHelper(wallInstance);
                 
-                // Store the wall instance and its collision data
+                // Store the wall instance and its collision data with scale information
                 this.collidableObjects.push({
                     object: wallInstance,
                     box: boxInfo.box,
                     meshes: [], // Array to store actual meshes for collision
-                    config: { ...instance, model: wallData.model }
+                    config: { 
+                        ...instance, 
+                        model: wallData.model,
+                        scaleX: instance.scaleX || 1,
+                        scaleY: instance.scaleY || 1,
+                        scaleZ: instance.scaleZ || 1
+                    }
                 });
                 
                 // Collect all meshes from the wall instance for precise collision
@@ -134,7 +208,10 @@ export class WorldManager {
         }
         
         if (this.worldData.spawners) {
+            console.log('Found spawners in world data:', this.worldData.spawners);
             this.loadSpawners(this.worldData.spawners);
+        } else {
+            console.warn('No spawners found in world data');
         }
     }
 
@@ -158,191 +235,33 @@ export class WorldManager {
                 spawnerConfig.position.z
             );
 
-            let spawner;
-            switch (spawnerConfig.type) {
-                case 'item':
-                    // Use itemIds array if available, fall back to itemId for backward compatibility
-                    const itemIds = spawnerConfig.itemIds || (spawnerConfig.itemId ? [spawnerConfig.itemId] : []);
-                    console.log(`Creating ItemSpawner ${index} with items: ${itemIds.join(', ')}`);
-                    
-                    // Skip if no items are defined
-                    if (itemIds.length === 0) {
-                        console.warn(`Skipping spawner ${index} with no items defined`);
-                        return;
-                    }
-
-                    // Create spawner with quantities if provided
-                    const quantities = spawnerConfig.quantities || itemIds.map(() => 1);
-                    spawner = new ItemSpawner(position, itemIds, spawnerConfig.cooldown, quantities);
-                    
-                    // Set active state if specified
-                    if (spawnerConfig.active !== undefined) {
-                        spawner.setActive(spawnerConfig.active);
-                    }
-                    break;
-                default:
-                    console.warn(`Unknown spawner type: ${spawnerConfig.type}`);
-                    return;
+            // Handle both itemIds array and items object formats
+            let itemIds, quantities;
+            if (spawnerConfig.itemIds) {
+                itemIds = spawnerConfig.itemIds;
+                quantities = spawnerConfig.quantities || itemIds.map(() => 1);
+                console.log(`Spawner ${index} using itemIds format:`, { itemIds, quantities });
+            } else if (spawnerConfig.items) {
+                itemIds = spawnerConfig.items.map(item => item.id);
+                quantities = spawnerConfig.items.map(item => item.quantity || 1);
+                console.log(`Spawner ${index} using items format:`, { itemIds, quantities });
+            } else {
+                console.warn(`No items or itemIds found in spawner config at index ${index}`);
+                return;
             }
 
-            if (spawner) {
+            const cooldown = spawnerConfig.cooldown || 5000;
+
+            try {
+                // Create spawner with position first, then itemIds
+                const spawner = new ItemSpawner(position, itemIds, cooldown, quantities);
+                console.log(`Created spawner at position:`, position);
+                spawner.addToScene(this.scene); // Add to scene after creation
                 this.spawners.push(spawner);
-                // Spawn initial item if spawner is active
-                if (spawner.active) {
-                    spawner.spawn();
-                }
-                spawner.addToScene(this.scene);
+                console.log(`Added spawner to world, total spawners:`, this.spawners.length);
+            } catch (error) {
+                console.error(`Error creating spawner at index ${index}:`, error);
             }
         });
     }
-
-    addWallInstance(modelName, position, rotation) {
-        const wallConfig = this.worldData.walls.find(w => w.model === modelName);
-        if (!wallConfig) {
-            console.error('Wall model not found:', modelName);
-            return;
-        }
-
-        const newInstance = {
-            x: position.x,
-            y: position.y,
-            z: position.z,
-            rotationY: rotation.y
-        };
-
-        wallConfig.instances.push(newInstance);
-        
-        // Use cached model if available
-        const modelPath = this.worldData.settings.modelBasePath + modelName;
-        if (this.modelCache.has(modelPath)) {
-            const instance = this.modelCache.get(modelPath).clone();
-            this.setupWallInstance(instance, newInstance, modelName);
-        } else {
-            this.loadModel(modelPath).then(gltf => {
-                const instance = gltf.scene.clone();
-                this.setupWallInstance(instance, newInstance, modelName);
-            });
-        }
-    }
-
-    setupWallInstance(instance, config, modelName) {
-        instance.scale.set(
-            this.worldData.settings.scaleFactor,
-            this.worldData.settings.scaleFactor,
-            this.worldData.settings.scaleFactor
-        );
-        instance.position.set(config.x, config.y, config.z);
-        instance.rotation.y = config.rotationY;
-        
-        this.scene.add(instance);
-        instance.updateMatrixWorld(true);
-        
-        const boxInfo = this.createBoundingBoxHelper(instance);
-        this.collidableObjects.push({
-            object: instance,
-            box: boxInfo.box,
-            config: { ...config, model: modelName }
-        });
-    }
-
-    removeWallInstance(modelName, index) {
-        const wallConfig = this.worldData.walls.find(w => w.model === modelName);
-        if (!wallConfig || index >= wallConfig.instances.length) {
-            console.error('Wall instance not found:', modelName, index);
-            return;
-        }
-
-        const instanceToRemove = wallConfig.instances[index];
-        wallConfig.instances.splice(index, 1);
-
-        // Find and remove the corresponding object
-        const objectIndex = this.collidableObjects.findIndex(
-            obj => obj.config.model === modelName && 
-                  obj.config.x === instanceToRemove.x &&
-                  obj.config.z === instanceToRemove.z
-        );
-
-        if (objectIndex !== -1) {
-            const obj = this.collidableObjects[objectIndex];
-            this.scene.remove(obj.object);
-            this.boundingBoxHelpers[objectIndex].dispose();
-            this.scene.remove(this.boundingBoxHelpers[objectIndex]);
-            this.collidableObjects.splice(objectIndex, 1);
-            this.boundingBoxHelpers.splice(objectIndex, 1);
-        }
-    }
-
-    updateWallInstance(modelName, index, newPosition, newRotation) {
-        const wallConfig = this.worldData.walls.find(w => w.model === modelName);
-        if (!wallConfig || index >= wallConfig.instances.length) {
-            console.error('Wall instance not found:', modelName, index);
-            return;
-        }
-
-        const oldInstance = wallConfig.instances[index];
-        const newInstance = {
-            x: newPosition.x,
-            y: newPosition.y,
-            z: newPosition.z,
-            rotationY: newRotation.y
-        };
-
-        // Update configuration
-        wallConfig.instances[index] = newInstance;
-
-        // Find and update the corresponding object
-        const objectIndex = this.collidableObjects.findIndex(
-            obj => obj.config.model === modelName &&
-                  obj.config.x === oldInstance.x &&
-                  obj.config.z === oldInstance.z
-        );
-
-        if (objectIndex !== -1) {
-            const obj = this.collidableObjects[objectIndex];
-            obj.object.position.copy(newPosition);
-            obj.object.rotation.y = newRotation.y;
-            obj.object.updateMatrixWorld(true);
-            obj.box.setFromObject(obj.object);
-            obj.config = { ...newInstance, model: modelName };
-        }
-    }
-
-    update(player) {
-        // Update all spawners
-        this.spawners.forEach((spawner, index) => {
-            spawner.update();
-            
-            // Check for item collection
-            if (player && spawner.currentSpawnable && !spawner.currentSpawnable.isCollected) {
-                // Use the collision sphere for better collision detection
-                const playerBox = player.collisionSphere ? 
-                    new THREE.Box3().setFromObject(player.collisionSphere) : 
-                    new THREE.Box3().setFromObject(player.camera);
-                
-                const itemBox = new THREE.Box3();
-                
-                // If the item has a model, use it for collision
-                if (spawner.currentSpawnable.model) {
-                    itemBox.setFromObject(spawner.currentSpawnable.model);
-                } else {
-                    // Fallback to using position with a small radius
-                    const radius = 0.5;
-                    const pos = spawner.currentSpawnable.position;
-                    itemBox.min.set(pos.x - radius, pos.y - radius, pos.z - radius);
-                    itemBox.max.set(pos.x + radius, pos.y + radius, pos.z + radius);
-                }
-                
-                // Check for intersection
-                if (playerBox.intersectsBox(itemBox)) {
-                    console.log(`Player collected item from spawner ${index}`);
-                    // Call the spawner's collect method instead of the spawnable's directly
-                    spawner.collect(player);
-                }
-            }
-        });
-    }
-
-    getCollidableObjects() {
-        return this.collidableObjects;
-    }
-} 
+}

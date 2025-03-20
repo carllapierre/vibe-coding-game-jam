@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { PointerLockControls } from './../../node_modules/three/examples/jsm/controls/PointerLockControls.js';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
-import { FoodRegistry } from '../food/FoodRegistry.js';
 import { assetPath } from '../utils/pathHelper.js';
 
 export class Character {
@@ -499,5 +498,9 @@ export class Character {
                 );
             }
         }
+    }
+
+    getPosition() {
+        return this.camera.position;
     }
 } 

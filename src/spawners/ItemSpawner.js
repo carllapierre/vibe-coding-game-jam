@@ -10,27 +10,42 @@ export class ItemSpawner extends Spawner {
         this.itemIds = Array.isArray(itemIds) ? itemIds : [itemIds];
         this.quantities = quantities || this.itemIds.map(() => 1);
         this.cooldown = cooldown;
-        this.lastSpawnTime = 0;
+        this.lastSpawnTime = Date.now(); // Initialize to current time
         this.currentSpawnable = null;
         this.isRespawning = false;
         this.scene = null;
         this.active = true;
         this.respawnTimeoutId = null;
+        this.isSpawning = false;
         
         console.log(`Created ItemSpawner with cooldown: ${cooldown}ms, items: ${this.itemIds.join(', ')}`);
     }
 
+    clearTimeouts() {
+        if (this.respawnTimeoutId) {
+            clearTimeout(this.respawnTimeoutId);
+            this.respawnTimeoutId = null;
+        }
+    }
+
     spawn() {
+        // Multiple safety checks
         if (!this.active) {
             console.log('Spawner is not active, skipping spawn');
             return;
         }
         
-        // Clear any existing respawn timeout
-        if (this.respawnTimeoutId) {
-            clearTimeout(this.respawnTimeoutId);
-            this.respawnTimeoutId = null;
+        if (this.isSpawning) {
+            console.log('Already spawning, skipping spawn request');
+            return;
         }
+        
+        if (this.currentSpawnable) {
+            console.log('Spawnable already exists, skipping spawn');
+            return;
+        }
+
+        this.clearTimeouts();
         
         const currentTime = Date.now();
         const timeSinceLastSpawn = currentTime - this.lastSpawnTime;
@@ -38,52 +53,46 @@ export class ItemSpawner extends Spawner {
         if (this.isRespawning && timeSinceLastSpawn < this.cooldown) {
             const remainingTime = this.cooldown - timeSinceLastSpawn;
             console.log(`Still respawning, ${remainingTime}ms remaining`);
-            
-            // Set up a timeout to spawn after the remaining time
-            this.respawnTimeoutId = setTimeout(() => {
-                console.log("Respawn timeout triggered");
-                this.isRespawning = false;
-                this.spawn();
-            }, remainingTime);
-            
             return;
         }
 
-        // Select a random item ID from the available options
-        const randomIndex = Math.floor(Math.random() * this.itemIds.length);
-        const selectedItemId = this.itemIds[randomIndex];
-        const selectedQuantity = this.quantities[randomIndex];
-        
-        console.log(`Spawning item: ${selectedItemId} with quantity: ${selectedQuantity}`);
+        this.isSpawning = true;
+        console.log('Starting spawn process...');
 
         try {
-            // Create a new spawnable with the randomly selected item
+            const randomIndex = Math.floor(Math.random() * this.itemIds.length);
+            const selectedItemId = this.itemIds[randomIndex];
+            const selectedQuantity = this.quantities[randomIndex];
+            
+            console.log(`Spawning item: ${selectedItemId} with quantity: ${selectedQuantity}`);
+
             this.currentSpawnable = new Spawnable(this.position, selectedItemId);
-            // Store the quantity in the spawnable for collection
             this.currentSpawnable.quantity = selectedQuantity;
             
-            // If we already have a scene, add the spawnable to it
             if (this.scene) {
                 this.currentSpawnable.addToScene(this.scene);
             }
             
             this.lastSpawnTime = currentTime;
             this.isRespawning = false;
+            console.log('Spawn successful');
         } catch (error) {
             console.error("Error spawning item:", error);
+            this.isSpawning = false;
+            this.isRespawning = false;
             
-            // Try again with a different item in 1 second
-            setTimeout(() => {
-                if (this.itemIds.length > 1) {
-                    // Remove the problematic item from the list
-                    const index = this.itemIds.indexOf(selectedItemId);
-                    this.itemIds.splice(index, 1);
-                    this.quantities.splice(index, 1);
-                    console.log(`Removed problematic item ${selectedItemId}, trying with remaining items: ${this.itemIds.join(', ')}`);
+            // Reset state
+            if (this.currentSpawnable) {
+                try {
+                    this.currentSpawnable.cleanup();
+                } catch (e) {
+                    console.error("Error cleaning up spawnable:", e);
                 }
-                this.spawn();
-            }, 1000);
+                this.currentSpawnable = null;
+            }
         }
+
+        this.isSpawning = false;
     }
 
     setActive(active) {
@@ -106,64 +115,61 @@ export class ItemSpawner extends Spawner {
     update() {
         if (!this.active) return;
         
-        // Update current spawnable if it exists
         if (this.currentSpawnable) {
             this.currentSpawnable.update();
+            return;
         }
 
-        // Check if we should spawn a new item
-        if (!this.currentSpawnable && !this.isRespawning) {
-            console.log('No current spawnable and not respawning, spawning new item');
-            this.spawn();
-        }
-        // Check if we should respawn
-        else if (this.isRespawning) {
+        // Only spawn if we're in a clean state
+        if (!this.isSpawning && !this.isRespawning && !this.currentSpawnable) {
             const currentTime = Date.now();
             const timeSinceLastSpawn = currentTime - this.lastSpawnTime;
             
             if (timeSinceLastSpawn >= this.cooldown) {
-                console.log(`Respawn cooldown complete (${timeSinceLastSpawn}ms elapsed), spawning new item`);
                 this.spawn();
             }
         }
     }
 
     collect(player) {
-        if (!this.currentSpawnable) {
+        if (!this.currentSpawnable || this.isRespawning) {
             return;
         }
 
         console.log('Item collected, starting respawn timer');
         
         try {
+            this.isRespawning = true;
+            
             // Call the collection callback
             this.currentSpawnable.collect(player);
             
-            // Clean up the spawnable (this will remove it from the scene)
+            // Clean up the spawnable after collection animation
             setTimeout(() => {
                 if (this.currentSpawnable) {
                     this.currentSpawnable.cleanup();
                     this.currentSpawnable = null;
                 }
-            }, 600); // Wait for collection animation to finish
+            }, 600);
             
-            // Start respawn timer
-            this.isRespawning = true;
             this.lastSpawnTime = Date.now();
             
-            // Set up a guaranteed respawn after the cooldown
+            // Clear any existing timeouts before setting new one
+            this.clearTimeouts();
+            
+            // Set up a single respawn after the cooldown
             this.respawnTimeoutId = setTimeout(() => {
-                console.log(`Forced respawn after cooldown of ${this.cooldown}ms`);
+                console.log('Respawn cooldown complete');
                 this.isRespawning = false;
-                this.currentSpawnable = null;
-                this.spawn();
+                if (!this.currentSpawnable) {
+                    this.spawn();
+                }
             }, this.cooldown);
             
-            console.log(`Respawn timer started, will respawn in ${this.cooldown}ms`);
         } catch (error) {
             console.error("Error during item collection:", error);
             
-            // Force a reset of the spawner in case of error
+            // Reset state in case of error
             if (this.currentSpawnable) {
                 try {
                     this.currentSpawnable.cleanup();
@@ -173,15 +179,8 @@ export class ItemSpawner extends Spawner {
                 this.currentSpawnable = null;
             }
             
-            // Start respawn timer to try again
-            this.isRespawning = true;
-            this.lastSpawnTime = Date.now();
-            
-            // Set a shorter timeout to try again
-            this.respawnTimeoutId = setTimeout(() => {
-                this.isRespawning = false;
-                this.spawn();
-            }, 2000);
+            this.isRespawning = false;
+            this.isSpawning = false;
         }
     }
 
@@ -195,5 +194,25 @@ export class ItemSpawner extends Spawner {
     getRemainingCooldown() {
         if (!this.isRespawning) return 0;
         return Math.max(0, this.cooldown - (Date.now() - this.lastSpawnTime));
+    }
+
+    checkCollection(character) {
+        if (!this.currentSpawnable || !character) return;
+
+        // Get the character's position
+        const characterPosition = character.getPosition();
+        if (!characterPosition) return;
+
+        // Get the spawnable's position
+        const spawnablePosition = this.currentSpawnable.position;
+        
+        // Calculate distance between character and spawnable
+        const distance = characterPosition.distanceTo(spawnablePosition);
+        
+        // If within collection range (2 units)
+        if (distance <= 2) {
+            console.log('Item in collection range, collecting...');
+            this.collect(character);
+        }
     }
 } 

@@ -43,4 +43,27 @@ logs/
 tmp/
 
 # Cache
-.cache/ 
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+public/data/world.json.bak
+
+# OS specific
+.DS_Store
+Thumbs.db 

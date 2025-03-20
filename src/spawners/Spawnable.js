@@ -439,10 +439,19 @@ export class Spawnable {
                 this.scene.remove(this.particles);
                 this.particles.geometry.dispose();
                 this.particles.material.dispose();
+                this.particles = null;
             }
 
-            // Clear scene reference
-            this.scene = null;
+            // Clean up collection particles
+            this.cleanupCollectionParticles();
         }
+
+        // Clear references
+        this.scene = null;
+        this.model = null;
+        this.glowLight = null;
+        this.glowMesh = null;
+        this.shadowMesh = null;
+        this.isCollected = true;
     }
 } 
