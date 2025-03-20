@@ -10,23 +10,12 @@ export class Inventory {
     }
 
     initializeHotbar() {
-        // Initialize all 9 slots
-        const foodCount = FoodRegistry.getFoodCount();
+        // Initialize all 9 slots as empty
         for (let i = 0; i < 9; i++) {
-            if (i < foodCount) {
-                // Fill with available food items
-                const foodType = FoodRegistry.getFoodTypeByIndex(i);
-                this.slots[i] = {
-                    item: foodType,
-                    amount: 5
-                };
-            } else {
-                // Empty slots
-                this.slots[i] = {
-                    item: null,
-                    amount: 0
-                };
-            }
+            this.slots[i] = {
+                item: null,
+                amount: 0
+            };
         }
     }
 
@@ -34,12 +23,16 @@ export class Inventory {
         if (index >= 0 && index < this.slots.length) {
             this.selectedSlot = index;
             if (this.onSelectionChange) {
-                // Pass null for empty slots, otherwise pass the index
-                this.onSelectionChange(this.slots[index].item ? index : null);
+                const slot = this.slots[index];
+                this.onSelectionChange(index, slot.item);
             }
             return true;
         }
         return false;
+    }
+
+    getSelectedSlot() {
+        return this.slots[this.selectedSlot];
     }
 
     consumeSelectedItem() {
@@ -51,7 +44,7 @@ export class Inventory {
             if (slot.amount === 0) {
                 slot.item = null;
                 if (this.onSelectionChange) {
-                    this.onSelectionChange(null);
+                    this.onSelectionChange(null, null);
                 }
             }
 
@@ -71,13 +64,6 @@ export class Inventory {
         this.selectSlot(newSlot);
     }
 
-    getSelectedSlot() {
-        return {
-            index: this.selectedSlot,
-            ...this.slots[this.selectedSlot]
-        };
-    }
-
     getSlot(index) {
         if (index >= 0 && index < this.slots.length) {
             return this.slots[index];
@@ -90,6 +76,14 @@ export class Inventory {
             this.slots[index].amount = Math.max(0, amount);
             if (this.slots[index].amount === 0) {
                 this.slots[index].item = null;
+                // If this was the selected slot, notify of change
+                if (index === this.selectedSlot && this.onSelectionChange) {
+                    this.onSelectionChange(null, null);
+                }
+            }
+            // Always notify of amount change
+            if (this.onAmountChange) {
+                this.onAmountChange(index, this.slots[index].amount);
             }
         }
     }

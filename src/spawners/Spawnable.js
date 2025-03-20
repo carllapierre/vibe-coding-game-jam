@@ -15,6 +15,7 @@ export class Spawnable {
         this.shadowMesh = null;
         this.particles = null;
         this.collectionParticles = [];
+        this.quantity = 1; // Default quantity
         
         // Get item configuration
         this.itemConfig = ItemRegistry.getItem(itemId);
@@ -299,23 +300,27 @@ export class Spawnable {
     collect(player) {
         if (this.isCollected) return;
         
-        // Start collection animation
+        this.isCollected = true;
+        
+        if (this.itemConfig && this.itemConfig.onCollect) {
+            // Pass the quantity to the onCollect callback through a custom object
+            const collectionData = {
+                quantity: this.quantity,
+                itemId: this.itemConfig.id
+            };
+            this.itemConfig.onCollect(player, collectionData);
+        }
+        
+        // Start collection animation/effects
         this.startCollectionAnimation().then(() => {
-            // After animation completes, trigger the item effect
-            if (this.itemConfig && this.itemConfig.onCollect) {
-                this.itemConfig.onCollect(player);
-            }
-            // Clean up after collection
+            // Clean up after animation completes
             this.cleanup();
         });
-        
-        this.isCollected = true;
     }
 
     startCollectionAnimation() {
         return new Promise((resolve) => {
             if (!this.scene) {
-                // If scene is already null, resolve immediately
                 resolve();
                 return;
             }
@@ -326,7 +331,7 @@ export class Spawnable {
             
             // Create collection particles
             const particleCount = 20;
-            this.collectionParticles = []; // Store particles in class property
+            this.collectionParticles = [];
             
             for (let i = 0; i < particleCount; i++) {
                 const geometry = new THREE.SphereGeometry(0.05, 8, 8);
@@ -354,14 +359,13 @@ export class Spawnable {
                     (Math.random() - 0.5) * 0.1
                 );
                 
-                if (this.scene) { // Check if scene exists before adding
+                if (this.scene) {
                     this.scene.add(particle);
                     this.collectionParticles.push(particle);
                 }
             }
             
             const animate = () => {
-                // Safety check - if scene was removed during animation
                 if (!this.scene) {
                     this.cleanupCollectionParticles();
                     resolve();
@@ -392,14 +396,9 @@ export class Spawnable {
                 
                 // Update particles
                 this.collectionParticles.forEach(particle => {
-                    // Move particle outward and upward
                     particle.position.add(particle.userData.velocity);
-                    particle.userData.velocity.y += 0.001; // Add upward acceleration
-                    
-                    // Fade out particle
+                    particle.userData.velocity.y += 0.001;
                     particle.material.opacity = 0.8 * (1 - progress);
-                    
-                    // Scale particle
                     const particleScale = 1 - progress * 0.5;
                     particle.scale.set(particleScale, particleScale, particleScale);
                 });
@@ -407,7 +406,6 @@ export class Spawnable {
                 if (progress < 1 && this.scene) {
                     requestAnimationFrame(animate);
                 } else {
-                    // Clean up particles
                     this.cleanupCollectionParticles();
                     resolve();
                 }

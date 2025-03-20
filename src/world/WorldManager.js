@@ -160,8 +160,10 @@ export class WorldManager {
                         console.warn(`Skipping spawner ${index} with no items defined`);
                         return;
                     }
-                    
-                    spawner = new ItemSpawner(position, itemIds, spawnerConfig.cooldown);
+
+                    // Create spawner with quantities if provided
+                    const quantities = spawnerConfig.quantities || itemIds.map(() => 1);
+                    spawner = new ItemSpawner(position, itemIds, spawnerConfig.cooldown, quantities);
                     
                     // Set active state if specified
                     if (spawnerConfig.active !== undefined) {

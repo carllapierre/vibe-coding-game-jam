@@ -102,11 +102,10 @@ export class Character {
         this.previewGrowStartTime = 0;
         this.growDuration = 500;
         
-        this.currentFoodIndex = 0;
+        this.currentFoodIndex = null;  // Start with no food selected
+        this.currentFoodItem = null;   // Start with no food item
         this.previewModel = null;
         this.loader = new GLTFLoader();
-        
-        this.updatePreviewModel();
     }
 
     setupEventListeners() {
@@ -137,10 +136,12 @@ export class Character {
             this.keys[event.key] = true;
         }
 
+        // Number keys now just select inventory slots
         const num = parseInt(event.key);
-        if (num >= 1 && num <= FoodRegistry.getFoodCount()) {
-            this.currentFoodIndex = num - 1;
-            this.updatePreviewModel();
+        if (num >= 1 && num <= 9) {
+            if (this.inventory) {
+                this.inventory.selectSlot(num - 1);
+            }
         }
     }
 
@@ -152,20 +153,19 @@ export class Character {
 
     handleMouseDown(event) {
         if (this.controls.isLocked && event.button === 0 && !this.isThrowAnimating) {
-            // Only throw if we have a valid food type and items in inventory
-            if (this.currentFoodIndex !== null && this.inventory) {
+            // Only throw if we have a valid food item and items in inventory
+            if (this.currentFoodItem && this.inventory) {
                 const slot = this.inventory.getSelectedSlot();
                 if (slot.item && slot.amount > 0) {
                     const direction = new THREE.Vector3();
                     this.camera.getWorldDirection(direction);
                     
-                    const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
                     const projectile = new FoodProjectile({
                         scene: this.scene,
                         position: this.camera.position.clone().add(direction.multiplyScalar(2)),
                         direction: direction,
-                        foodModel: foodType.model,
-                        scale: foodType.scale,
+                        foodModel: this.currentFoodItem.model,
+                        scale: this.currentFoodItem.scale,
                         speed: 0.5,
                         gravity: 0.01,
                         arcHeight: 0.2,
@@ -204,12 +204,11 @@ export class Character {
     updatePreviewModel() {
         this.clearPreviewModel();
 
-        // Only show preview if we have a valid food index
-        if (this.currentFoodIndex !== null) {
-            const foodType = FoodRegistry.getFoodTypeByIndex(this.currentFoodIndex);
-            this.loader.load(assetPath(`objects/${foodType.model}`), (gltf) => {
+        // Only show preview if we have a valid food item
+        if (this.currentFoodItem) {
+            this.loader.load(assetPath(`objects/${this.currentFoodItem.model}`), (gltf) => {
                 this.previewModel = gltf.scene;
-                const baseScale = foodType.scale * 1.5;
+                const baseScale = this.currentFoodItem.scale * 1.5;
                 this.previewModel.scale.set(0.001, 0.001, 0.001);
                 this.previewModel.baseScale = baseScale;
                 this.scene.add(this.previewModel);

@@ -5,11 +5,12 @@ import { ItemRegistry } from './ItemRegistry.js';
 import { SpawnableRegistry } from './SpawnableRegistry.js';
 
 export class ItemSpawner extends Spawner {
-    constructor(position, itemIds, cooldown = 5000) {
+    constructor(position, itemIds, cooldown = 5000, quantities = null) {
         super(position, new Vector3(0, 0, 0));
         
         // Support both single itemId (string) and array of itemIds
         this.itemIds = Array.isArray(itemIds) ? itemIds : [itemIds];
+        this.quantities = quantities || this.itemIds.map(() => 1);
         this.cooldown = cooldown;
         this.lastSpawnTime = 0;
         this.currentSpawnable = null;
@@ -53,12 +54,15 @@ export class ItemSpawner extends Spawner {
         // Select a random item ID from the available options
         const randomIndex = Math.floor(Math.random() * this.itemIds.length);
         const selectedItemId = this.itemIds[randomIndex];
+        const selectedQuantity = this.quantities[randomIndex];
         
-        console.log(`Spawning item: ${selectedItemId}`);
+        console.log(`Spawning item: ${selectedItemId} with quantity: ${selectedQuantity}`);
 
         try {
             // Create a new spawnable with the randomly selected item
             this.currentSpawnable = new Spawnable(this.position, selectedItemId);
+            // Store the quantity in the spawnable for collection
+            this.currentSpawnable.quantity = selectedQuantity;
             
             // If we already have a scene, add the spawnable to it
             if (this.scene) {
@@ -74,7 +78,9 @@ export class ItemSpawner extends Spawner {
             setTimeout(() => {
                 if (this.itemIds.length > 1) {
                     // Remove the problematic item from the list
-                    this.itemIds = this.itemIds.filter(id => id !== selectedItemId);
+                    const index = this.itemIds.indexOf(selectedItemId);
+                    this.itemIds.splice(index, 1);
+                    this.quantities.splice(index, 1);
                     console.log(`Removed problematic item ${selectedItemId}, trying with remaining items: ${this.itemIds.join(', ')}`);
                 }
                 this.spawn();

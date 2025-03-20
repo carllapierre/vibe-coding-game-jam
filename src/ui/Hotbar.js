@@ -7,10 +7,11 @@ export class Hotbar {
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
         this.slotPreviewRenderers = [];
+        this.slotModels = new Array(9).fill(null);  // Store models for each slot
         
         // Register for amount updates
         this.inventory.setAmountChangeCallback((index, amount) => {
-            this.update();
+            this.updateSlot(index);
         });
         
         this.createHotbarUI();
@@ -34,7 +35,7 @@ export class Hotbar {
         `;
 
         const slots = this.inventory.getAllSlots();
-        const loader = new GLTFLoader();
+        this.loader = new GLTFLoader();
 
         // Create slots for each available item
         slots.forEach((slotData, i) => {
@@ -91,30 +92,9 @@ export class Hotbar {
             directionalLight.position.set(1, 1, 1);
             scene.add(directionalLight);
 
-            // Only load model if slot has an item
-            if (slotData.item) {
-                loader.load(assetPath(`objects/${slotData.item.model}`), (gltf) => {
-                    const model = gltf.scene;
-                    model.scale.multiplyScalar(slotData.item.scale * 3);
-                    // Center the model
-                    model.position.set(0, -0.3, 0); // Move down slightly
-                    scene.add(model);
-
-                    // Position camera to look at the model from slightly above
-                    camera.position.set(0, 0.8, 2);
-                    camera.lookAt(0, -0.2, 0); // Look at the model's new position
-
-                    // Auto-rotate animation
-                    const animate = () => {
-                        requestAnimationFrame(animate);
-                        model.rotation.y += 0.01;
-                        renderer.render(scene, camera);
-                    };
-                    animate();
-                }, undefined, (error) => {
-                    console.error('Error loading model:', error);
-                });
-            }
+            // Position camera
+            camera.position.set(0, 0.8, 2);
+            camera.lookAt(0, -0.2, 0);
 
             slot.appendChild(previewContainer);
 
@@ -141,70 +121,75 @@ export class Hotbar {
             this.slotPreviewRenderers.push(renderer);
         });
 
-        document.body.appendChild(this.container);
-
-        // Add keyboard listeners for slot selection
-        document.addEventListener('keydown', (e) => {
-            const num = parseInt(e.key);
-            if (num >= 1 && num <= slots.length) {
-                this.inventory.selectSlot(num - 1);
+        // Add wheel listener for scrolling through slots
+        window.addEventListener('wheel', (e) => {
+            if (document.pointerLockElement) {  // Only scroll when in game
+                const direction = e.deltaY > 0 ? 1 : -1;
+                this.inventory.scrollHotbar(direction);
                 this.update();
             }
-        });
-
-        // Add wheel listener for scrolling through slots
-        document.addEventListener('wheel', (e) => {
-            const direction = e.deltaY > 0 ? 1 : -1;
-            this.inventory.scrollHotbar(direction);
-            this.update();
         });
 
         this.update();
     }
 
+    updateSlot(index) {
+        const slot = this.container.children[index];
+        const itemData = this.inventory.getSlot(index);
+        
+        // Update amount display
+        const amountDisplay = slot.children[2];
+        amountDisplay.textContent = itemData.amount || '';
+
+        // Update preview
+        if (itemData.item) {
+            if (!this.slotModels[index]) {
+                // Load new model
+                this.loader.load(assetPath(`objects/${itemData.item.model}`), (gltf) => {
+                    const model = gltf.scene;
+                    model.scale.multiplyScalar(itemData.item.scale * 3);
+                    model.position.set(0, -0.3, 0);
+                    
+                    // Remove old model if it exists
+                    const scene = this.slotPreviewScenes[index];
+                    if (this.slotModels[index]) {
+                        scene.remove(this.slotModels[index]);
+                    }
+                    
+                    scene.add(model);
+                    this.slotModels[index] = model;
+
+                    // Start animation
+                    const animate = () => {
+                        if (this.slotModels[index] === model) {  // Only animate if this is still the current model
+                            requestAnimationFrame(animate);
+                            model.rotation.y += 0.01;
+                            this.slotPreviewRenderers[index].render(scene, this.slotPreviewCameras[index]);
+                        }
+                    };
+                    animate();
+                });
+            }
+        } else {
+            // Clear model if slot is empty
+            const scene = this.slotPreviewScenes[index];
+            if (this.slotModels[index]) {
+                scene.remove(this.slotModels[index]);
+                this.slotModels[index] = null;
+            }
+            this.slotPreviewRenderers[index].render(scene, this.slotPreviewCameras[index]);
+        }
+
+        // Update selection highlight
+        const isSelected = index === this.inventory.selectedSlot;
+        slot.style.border = isSelected ? '2px solid #ffffff' : '2px solid #ffffff40';
+        slot.style.background = isSelected ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+    }
+
     update() {
         const slots = this.container.children;
-        const selectedSlot = this.inventory.getSelectedSlot().index;
-
         for (let i = 0; i < slots.length; i++) {
-            const slot = slots[i];
-            const itemData = this.inventory.getSlot(i);
-            
-            // Reset slot style
-            slot.style.border = '2px solid #ffffff40';
-            
-            // Update amount
-            const amountDisplay = slot.children[2]; // Now the third child after preview container
-            amountDisplay.textContent = itemData.amount || '';
-
-            // Clear preview if item is gone
-            if (!itemData.item) {
-                const scene = this.slotPreviewScenes[i];
-                while(scene.children.length > 0) {
-                    const child = scene.children[0];
-                    if (child.type === 'Mesh') {
-                        child.geometry.dispose();
-                        child.material.dispose();
-                    }
-                    scene.remove(child);
-                }
-                // Keep lights in the scene
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                directionalLight.position.set(1, 1, 1);
-                scene.add(ambientLight);
-                scene.add(directionalLight);
-                // Render empty scene
-                this.slotPreviewRenderers[i].render(scene, this.slotPreviewCameras[i]);
-            }
-
-            // Highlight selected slot
-            if (i === selectedSlot) {
-                slot.style.border = '2px solid #ffffff';
-                slot.style.background = 'rgba(255, 255, 255, 0.2)';
-            } else {
-                slot.style.background = 'rgba(255, 255, 255, 0.1)';
-            }
+            this.updateSlot(i);
         }
     }
 } 

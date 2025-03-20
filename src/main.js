@@ -59,10 +59,42 @@ FoodRegistry.foodTypes.forEach(food => {
             name: food.id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
             modelPath: assetPath(`objects/${food.model}`), 
             scale: food.scale * 2.0,
-            onCollect: (player) => {
-                console.log(`Player collected ${food.id}`);
+            onCollect: (player, collectionData) => {
+                console.log(`Player collected ${food.id} x${collectionData.quantity}`);
                 if (player.inventory) {
-                    player.inventory.addItem(food.id);
+                    // Find first empty slot or slot with same item
+                    const slot = player.inventory.slots.findIndex(slot => 
+                        slot.item === null || (slot.item && slot.item.id === food.id)
+                    );
+                    
+                    if (slot !== -1) {
+                        const wasEmpty = player.inventory.slots[slot].item === null;
+                        
+                        // If slot is empty, set the item
+                        if (wasEmpty) {
+                            player.inventory.slots[slot].item = food;
+                            player.inventory.slots[slot].amount = collectionData.quantity;
+                        } else {
+                            // Add to existing stack
+                            player.inventory.slots[slot].amount += collectionData.quantity;
+                        }
+
+                        // Notify of amount change if callback exists
+                        if (player.inventory.onAmountChange) {
+                            player.inventory.onAmountChange(slot, player.inventory.slots[slot].amount);
+                        }
+
+                        // If this was the selected slot, update the preview
+                        if (slot === player.inventory.selectedSlot) {
+                            player.currentFoodItem = food;
+                            player.updatePreviewModel();
+                        }
+                        
+                        // If this was the first item collected, select it
+                        if (wasEmpty && player.inventory.slots.every((s, i) => i === slot || s.item === null)) {
+                            player.inventory.selectSlot(slot);
+                        }
+                    }
                 }
             }
         });
@@ -83,8 +115,9 @@ const debugManager = new DebugManager(scene, camera, renderer, character);
 
 // Connect inventory to character
 character.inventory = inventory;
-inventory.onSelectionChange = (selectedIndex) => {
+inventory.onSelectionChange = (selectedIndex, selectedItem) => {
     character.currentFoodIndex = selectedIndex;
+    character.currentFoodItem = selectedItem;  // This is the food item from the inventory
     character.updatePreviewModel();
 };
 
