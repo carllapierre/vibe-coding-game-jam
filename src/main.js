@@ -101,8 +101,26 @@ FoodRegistry.foodTypes.forEach(food => {
     }
 });
 
+
+// Convert food registry to spawnables
+const spawnables = FoodRegistry.foodTypes.map(food => ({
+    id: food.id,
+    modelPath: assetPath(`objects/${food.model}`),
+    scale: food.scale * 2.0,
+    ref: food
+}));
+
 // 2. Then initialize SpawnableRegistry which depends on food registry and items
-SpawnableRegistry.initialize();
+SpawnableRegistry.initialize(spawnables);
+
+// Some customization for spawnables
+SpawnableRegistry.updateSpawnableProperties(['carrot', 'cup-coffee'], {
+    glowColor: 0x65e553, //green
+    shadowColor: 0x65e553,
+    particleColor: 0x65e553,
+});
+
+
 // 3. Initialize world manager (which now doesn't register items again)
 const worldManager = new WorldManager(scene);
 let collidableObjects = [];

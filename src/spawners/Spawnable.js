@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { SpawnableRegistry } from './SpawnableRegistry.js';
 import { ItemRegistry } from './ItemRegistry.js';
-import { assetPath } from '../utils/pathHelper.js';
+
 export class Spawnable {
     constructor(position, itemId) {
         this.position = position;
@@ -26,46 +26,16 @@ export class Spawnable {
         
         // Get spawnable configuration - use the itemId as the spawnable type
         const config = SpawnableRegistry.getSpawnableType(itemId);
-        if (!config) {
-            console.error(`Spawnable type ${itemId} not found in registry`);
-            // Use default configuration
-            this.config = {
-                glowColor: 0xadd8e6,
-                glowIntensity: 0.6,
-                glowRadius: 4,
-                bobSpeed: 0.02,
-                bobHeight: 0.4,
-                rotationSpeed: 0.005,
-                showGlowMesh: false,
-                scale: 2.5, // Much larger scale
-                shadowColor: 0xadd8e6,
-                shadowOpacity: 0.25,
-                shadowScale: 2.2,
-                particleColor: 0xadd8e6,
-                particleCount: 25,
-                particleSize: 0.1,
-                particleSpeed: 0.02,
-                particleRadius: 0.8
-            };
-            
-            // If we have an item config, use its model path and scale
-            if (this.itemConfig) {
-                this.config.modelPath = this.itemConfig.modelPath || assetPath(`objects/${itemId}.glb`);
-                this.config.scale = (this.itemConfig.scale || 1.0) * 2.0; // Double the scale
-            } else {
-                // Fallback model path
-                this.config.modelPath = assetPath(`objects/${itemId}.glb`);
-            }
-        } else {
-            // Store configuration
-            this.config = {
-                ...config,
-                scale: config.scale * 1.25, // Increase configured scale by 25%
-                glowIntensity: config.glowIntensity * 1.2, // Brighter glow
-                glowRadius: config.glowRadius * 1.2, // Larger glow radius
-                bobHeight: config.bobHeight * 1.2 // Higher bobbing
-            };
-        }
+  
+        // Store configuration
+        this.config = {
+            ...config,
+            scale: config.scale * 1.25, // Increase configured scale by 25%
+            glowIntensity: config.glowIntensity * 1.2, // Brighter glow
+            glowRadius: config.glowRadius * 1.2, // Larger glow radius
+            bobHeight: config.bobHeight * 1.2 // Higher bobbing
+        };
+        
         
         // Initialize animation state
         this.bobOffset = 0;

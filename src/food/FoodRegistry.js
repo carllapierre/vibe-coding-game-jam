@@ -39,7 +39,7 @@ export class FoodRegistry {
         { id: 'paprika', model: 'paprika.glb', scale: 0.5 },
         { id: 'paprika-slice', model: 'paprika-slice.glb', scale: 0.5 },
         { id: 'radish', model: 'radish.glb', scale: 0.4 },
-
+        { id: 'carrot', model: 'carrot.glb', scale: 0.4 },
         // Prepared Foods
         { id: 'pizza', model: 'pizza.glb', scale: 0.7 },
         { id: 'sandwich', model: 'sandwich.glb', scale: 0.6 },
@@ -74,6 +74,7 @@ export class FoodRegistry {
         { id: 'soda-bottle', model: 'soda-bottle.glb', scale: 0.7 },
         { id: 'soda-can', model: 'soda-can.glb', scale: 0.5 },
         { id: 'soda-glass', model: 'soda-glass.glb', scale: 0.6 },
+        { id: 'cup-coffee', model: 'cup-coffee.glb', scale: 0.6 },
 
         // Condiments
         { id: 'soy', model: 'soy.glb', scale: 0.5 },

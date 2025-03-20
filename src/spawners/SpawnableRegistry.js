@@ -4,39 +4,47 @@ export class SpawnableRegistry {
     static spawnableTypes = [];
     
     // Initialize the spawnable types from food registry
-    static initialize() {
+    static initialize(spawnables = []) {
         console.log("Initializing SpawnableRegistry...");
         // Clear existing types
         this.spawnableTypes = [];
+
+        this.defaultSpawnableType = {
+            id: 'default', // Use the food ID as the spawnable ID
+            glowColor: 0xadd8e6,
+            glowIntensity: 0.6,
+            glowRadius: 3,
+            bobSpeed: 0.02,
+            bobHeight: 0.4,
+            rotationSpeed: 0.005,
+            showGlowMesh: false,
+            modelPath: assetPath(`objects/default.glb`),
+            scale: 2.5,
+            shadowColor: 0xadd8e6,
+            shadowOpacity: 0.25,
+            shadowScale: 1,
+            particleColor: 0xadd8e6,
+            particleCount: 25,
+            particleSize: 0.1,
+            particleSpeed: 0.02,
+            particleRadius: 0.8,
+            ref: null
+        }
         
-        // Create a spawnable type for each food item
-        FoodRegistry.foodTypes.forEach(food => {
-            console.log(`Registering spawnable type for food: ${food.id}`);
-            this.registerSpawnableType({
-                id: food.id, // Use the food ID as the spawnable ID
-                glowColor: 0xadd8e6,
-                glowIntensity: 0.6,
-                glowRadius: 4,
-                bobSpeed: 0.02,
-                bobHeight: 0.4,
-                rotationSpeed: 0.005,
-                showGlowMesh: false,
-                modelPath: assetPath(`objects/${food.model}`),
-                scale: food.scale * 2.5,
-                shadowColor: 0xadd8e6,
-                shadowOpacity: 0.25,
-                shadowScale: 2.2,
-                particleColor: 0xadd8e6,
-                particleCount: 25,
-                particleSize: 0.1,
-                particleSpeed: 0.02,
-                particleRadius: 0.8,
-                // Store the original food reference
-                foodRef: food
-            });
+        spawnables.forEach(spawnable => {
+            this.registerSpawnableType({...this.defaultSpawnableType, ...spawnable});
         });
         
         console.log(`SpawnableRegistry initialized with ${this.spawnableTypes.length} types`);
+    }
+
+    static updateSpawnableProperties(spawnableIds = [], properties) {
+        spawnableIds.forEach(spawnableId => {
+            const index = this.spawnableTypes.findIndex(type => type.id === spawnableId);
+            if (index !== -1) {
+                this.spawnableTypes[index] = {...this.spawnableTypes[index], ...properties};
+            }
+        });
     }
 
     static getSpawnableType(id) {

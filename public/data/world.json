@@ -93,7 +93,7 @@
         {
             "type": "item",
             "position": { "x": 4, "y": 1, "z": 4 },
-            "itemIds": ["tomato", "mushroom", "onion", "paprika", "radish"],
+            "itemIds": ["carrot", "cup-coffee"],
             "quantities": [3, 4, 3, 2, 4],
             "cooldown": 5000,
             "active": true
