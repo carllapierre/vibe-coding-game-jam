@@ -29,6 +29,14 @@ export class Character {
         this.canJump = true;
         this.playerRadius = 0.5;
 
+        // Camera bobbing variables
+        this.bobAmplitude = 0.25; // Reduced height of the bob for smoother motion
+        this.bobFrequency = 2; // Speed of the bob
+        this.bobTime = 0;
+        this.lastBobPosition = 0;
+        this.isMoving = false;
+        this.smoothingFactor = 0.25; // Added smoothing factor for transitions
+
         // Initialize controls
         this.controls = new PointerLockControls(camera, document.body);
         
@@ -385,6 +393,9 @@ export class Character {
         const moveForward = this.keys.w ? 1 : (this.keys.s ? -1 : 0);
         const moveRight = this.keys.d ? 1 : (this.keys.a ? -1 : 0);
         
+        // Check if character is moving horizontally
+        this.isMoving = moveForward !== 0 || moveRight !== 0;
+        
         const potentialPosition = this.camera.position.clone();
         
         if (moveForward !== 0) {
@@ -400,6 +411,27 @@ export class Character {
             this.controls.moveRight(moveRight * this.moveSpeed);
             if (this.checkCollision(this.camera.position)) {
                 this.camera.position.copy(potentialPosition);
+            }
+        }
+
+        // Update camera bobbing
+        if (this.isMoving && this.canJump) {  // Only bob when moving and on ground
+            this.bobTime += this.moveSpeed * this.bobFrequency;
+            const targetBobPosition = Math.sin(this.bobTime) * this.bobAmplitude;
+            
+            // Smooth interpolation between current and target position
+            const bobDifference = targetBobPosition - this.lastBobPosition;
+            this.lastBobPosition += bobDifference * this.smoothingFactor;
+            
+            this.camera.position.y += bobDifference * this.smoothingFactor;
+        } else {
+            // Gradually return to neutral position when not moving
+            if (Math.abs(this.lastBobPosition) > 0.001) {
+                this.lastBobPosition *= 0.9; // Slower decay for smoother stop
+                this.camera.position.y -= this.lastBobPosition * this.smoothingFactor;
+            } else {
+                this.lastBobPosition = 0;
+                this.bobTime = 0;
             }
         }
     }

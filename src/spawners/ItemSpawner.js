@@ -1,8 +1,6 @@
 import { Spawner } from './Spawner.js';
 import { Vector3 } from 'three';
 import { Spawnable } from './Spawnable.js';
-import { ItemRegistry } from './ItemRegistry.js';
-import { SpawnableRegistry } from './SpawnableRegistry.js';
 
 export class ItemSpawner extends Spawner {
     constructor(position, itemIds, cooldown = 5000, quantities = null) {
