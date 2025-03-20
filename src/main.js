@@ -8,6 +8,8 @@ import { SpawnableRegistry } from './spawners/SpawnableRegistry.js';
 import { ItemRegistry } from './spawners/ItemRegistry.js';
 import { FoodRegistry } from './food/FoodRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
+import { DebugManager } from './debug/DebugManager.js';
+
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -32,13 +34,21 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Camera setup
-camera.position.y = 2;
-camera.position.z = 5;
+// Create views containers
+const characterViewContainer = document.createElement('div');
+characterViewContainer.id = 'character-view';
+document.body.appendChild(characterViewContainer);
+
+// Move UI elements into character view
+const crosshair = document.createElement('div');
+crosshair.id = 'crosshair';
+crosshair.textContent = '+';
+characterViewContainer.appendChild(crosshair);
 
 // Initialize inventory system
 const inventory = new Inventory();
 const hotbar = new Hotbar(inventory);
+characterViewContainer.appendChild(hotbar.container);
 
 // Register food items with ItemRegistry if they don't already exist
 FoodRegistry.foodTypes.forEach(food => {
@@ -65,8 +75,11 @@ SpawnableRegistry.initialize();
 const worldManager = new WorldManager(scene);
 let collidableObjects = [];
 
-// Initialize character (we'll update its collidable objects after world loads)
+// Initialize character
 const character = new Character(scene, camera, collidableObjects);
+
+// Initialize debug manager
+const debugManager = new DebugManager(scene, camera, renderer, character);
 
 // Connect inventory to character
 character.inventory = inventory;
@@ -109,8 +122,15 @@ window.addEventListener('resize', () => {
 function animate() {
     requestAnimationFrame(animate);
 
-    // Update character
-    character.update();
+    if (debugManager.isDebugMode) {
+        // Editor view - hide character view
+        characterViewContainer.style.display = 'none';
+        debugManager.update();
+    } else {
+        // Character view - show character view
+        characterViewContainer.style.display = 'block';
+        character.update();
+    }
 
     // Update all projectiles
     FoodProjectile.updateAll();

@@ -10,6 +10,7 @@ export class Character {
         this.scene = scene;
         this.camera = camera;
         this.collidableObjects = collidableObjects;
+        this.enabled = true;
         
         // Movement variables
         this.moveSpeed = 0.15;
@@ -60,6 +61,16 @@ export class Character {
         };
     }
 
+    setEnabled(enabled) {
+        this.enabled = enabled;
+        if (!enabled) {
+            // Reset all movement keys when disabled
+            Object.keys(this.keys).forEach(key => this.keys[key] = false);
+            // Unlock controls when disabled
+            this.controls.unlock();
+        }
+    }
+
     setupHand() {
         const handGeometry = new THREE.BoxGeometry(0.003, 0.009, 0.003, 1, 1, 1).toNonIndexed();
         const positionAttribute = handGeometry.getAttribute('position');
@@ -99,10 +110,26 @@ export class Character {
     }
 
     setupEventListeners() {
-        document.addEventListener('keydown', (event) => this.handleKeyDown(event));
-        document.addEventListener('keyup', (event) => this.handleKeyUp(event));
-        document.addEventListener('mousedown', (event) => this.handleMouseDown(event));
-        document.addEventListener('click', () => this.controls.lock());
+        document.addEventListener('keydown', (event) => {
+            if (!this.enabled) return;
+            // Don't handle character controls if Shift+D is pressed (debug mode toggle)
+            if (event.key === 'D' && event.shiftKey) {
+                return;
+            }
+            this.handleKeyDown(event);
+        });
+        document.addEventListener('keyup', (event) => {
+            if (!this.enabled) return;
+            this.handleKeyUp(event);
+        });
+        document.addEventListener('mousedown', (event) => {
+            if (!this.enabled) return;
+            this.handleMouseDown(event);
+        });
+        document.addEventListener('click', () => {
+            if (!this.enabled) return;
+            this.controls.lock();
+        });
     }
 
     handleKeyDown(event) {
@@ -284,7 +311,7 @@ export class Character {
         // Update collision sphere position
         this.collisionSphere.position.copy(this.camera.position);
         
-        if (!this.controls.isLocked) return;
+        if (!this.enabled || !this.controls.isLocked) return;
 
         this.updateMovement();
         this.updateHandAndPreviewModel();
