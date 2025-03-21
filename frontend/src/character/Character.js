@@ -5,7 +5,8 @@ import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { assetPath } from '../utils/pathHelper.js';
 
 export class Character {
-    constructor(scene, camera, collidableObjects) {
+    constructor(scene, camera, collidableObjects, _itemRegistry) {
+        this.itemRegistry = _itemRegistry;
         this.scene = scene;
         this.camera = camera;
         this.collidableObjects = collidableObjects;
@@ -110,7 +111,7 @@ export class Character {
         this.growDuration = 500;
         
         this.currentFoodIndex = null;  // Start with no food selected
-        this.currentFoodItem = null;   // Start with no food item
+        this.currentItem = null;   // Start with no food item
         this.previewModel = null;
         this.loader = new GLTFLoader();
     }
@@ -161,18 +162,20 @@ export class Character {
     handleMouseDown(event) {
         if (this.controls.isLocked && event.button === 0 && !this.isThrowAnimating) {
             // Only throw if we have a valid food item and items in inventory
-            if (this.currentFoodItem && this.inventory) {
+            if (this.currentItem && this.inventory) {
                 const slot = this.inventory.getSelectedSlot();
                 if (slot.item && slot.amount > 0) {
                     const direction = new THREE.Vector3();
                     this.camera.getWorldDirection(direction);
                     
+
+                    const itemConfig = this.itemRegistry.getType(this.currentItem);
                     const projectile = new FoodProjectile({
                         scene: this.scene,
                         position: this.camera.position.clone().add(direction.multiplyScalar(2)),
                         direction: direction,
-                        foodModel: this.currentFoodItem.model,
-                        scale: this.currentFoodItem.scale,
+                        path: itemConfig.modelPath,
+                        scale: itemConfig.scale,
                         speed: 0.5,
                         gravity: 0.01,
                         arcHeight: 0.2,
@@ -212,10 +215,11 @@ export class Character {
         this.clearPreviewModel();
 
         // Only show preview if we have a valid food item
-        if (this.currentFoodItem) {
-            this.loader.load(assetPath(`objects/${this.currentFoodItem.model}`), (gltf) => {
+        if (this.currentItem) {
+            const itemConfig = this.itemRegistry.getType(this.currentItem);
+            this.loader.load(itemConfig.modelPath, (gltf) => {
                 this.previewModel = gltf.scene;
-                const baseScale = this.currentFoodItem.scale * 1.5;
+                const baseScale = itemConfig.scale * 1.5;
                 this.previewModel.scale.set(0.001, 0.001, 0.001);
                 this.previewModel.baseScale = baseScale;
                 this.scene.add(this.previewModel);

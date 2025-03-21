@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { assetPath } from '../utils/pathHelper.js';
+
 export class Hotbar {
-    constructor(inventory) {
+    constructor(inventory, _itemRegistry) {
         this.inventory = inventory;
+        this.itemRegistry = _itemRegistry;
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
         this.slotPreviewRenderers = [];
@@ -136,18 +138,19 @@ export class Hotbar {
     updateSlot(index) {
         const slot = this.container.children[index];
         const itemData = this.inventory.getSlot(index);
-        
+        const itemConfig = this.itemRegistry.getType(itemData.item);
         // Update amount display
         const amountDisplay = slot.children[2];
         amountDisplay.textContent = itemData.amount || '';
 
         // Update preview
-        if (itemData.item) {
+        if (itemConfig) {
             if (!this.slotModels[index]) {
                 // Load new model
-                this.loader.load(assetPath(`objects/${itemData.item.model}`), (gltf) => {
+                console.log(itemData)
+                this.loader.load(assetPath(`objects/${itemConfig.model}`), (gltf) => {
                     const model = gltf.scene;
-                    model.scale.multiplyScalar(itemData.item.scale * 3);
+                    model.scale.multiplyScalar(itemConfig.scale * 3);
                     model.position.set(0, -0.3, 0);
                     
                     // Remove old model if it exists

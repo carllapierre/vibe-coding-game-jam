@@ -1,7 +1,10 @@
-export class FoodRegistry {
-    static foodTypes = [
+import { Registry } from '../core/Registry.js';
+
+export class ItemRegistry extends Registry {
+
+    static items = [
         // Meats
-        { id: 'turkey', model: 'turkey.glb', scale: 0.6 },
+        { id: 'turkey', model: 'turkey.glb', scale: 0.6, },
         { id: 'meat-cooked', model: 'meat-cooked.glb', scale: 0.7 },
         { id: 'meat-patty', model: 'meat-patty.glb', scale: 0.6 },
         { id: 'meat-raw', model: 'meat-raw.glb', scale: 0.6 },
@@ -82,35 +85,4 @@ export class FoodRegistry {
         { id: 'shaker-pepper', model: 'shaker-pepper.glb', scale: 0.5 },
         { id: 'shaker-salt', model: 'shaker-salt.glb', scale: 0.5 }
     ];
-
-    static getFoodType(id) {
-        return this.foodTypes.find(food => food.id === id);
-    }
-
-    static getFoodTypeByIndex(index) {
-        return this.foodTypes[index];
-    }
-
-    static getFoodCount() {
-        return this.foodTypes.length;
-    }
-
-    static registerFoodType(foodType) {
-        if (!foodType.id || !foodType.model || !foodType.scale) {
-            throw new Error('Food type must have id, model, and scale properties');
-        }
-        
-        if (this.foodTypes.some(food => food.id === foodType.id)) {
-            throw new Error(`Food type with id ${foodType.id} already exists`);
-        }
-
-        this.foodTypes.push(foodType);
-    }
-
-    static removeFoodType(id) {
-        const index = this.foodTypes.findIndex(food => food.id === id);
-        if (index !== -1) {
-            this.foodTypes.splice(index, 1);
-        }
-    }
-} 
+}

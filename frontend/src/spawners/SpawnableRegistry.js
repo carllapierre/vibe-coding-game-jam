@@ -1,4 +1,3 @@
-import { FoodRegistry } from '../food/FoodRegistry.js';
 import { assetPath } from '../utils/pathHelper.js';
 export class SpawnableRegistry {
     static spawnableTypes = [];
@@ -18,7 +17,7 @@ export class SpawnableRegistry {
             bobHeight: 0.4,
             rotationSpeed: 0.005,
             showGlowMesh: false,
-            modelPath: assetPath(`objects/default.glb`),
+            model: assetPath(`objects/default.glb`),
             scale: 2.5,
             shadowColor: 0xadd8e6,
             shadowOpacity: 0.25,

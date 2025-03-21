@@ -1,4 +1,3 @@
-import { FoodRegistry } from '../food/FoodRegistry.js';
 
 export class Inventory {
     constructor() {

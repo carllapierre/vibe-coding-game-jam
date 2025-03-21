@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { SpawnableRegistry } from './SpawnableRegistry.js';
-import { ItemRegistry } from './ItemRegistry.js';
+import { ItemRegistry } from './../registries/ItemRegistry.js';
 
 export class Spawnable {
     constructor(position, itemId) {
@@ -17,15 +17,9 @@ export class Spawnable {
         this.collectionParticles = [];
         this.quantity = 1; // Default quantity
         
-        // Get item configuration
-        this.itemConfig = ItemRegistry.getItem(itemId);
-        if (!this.itemConfig) {
-            console.error(`Item with id ${itemId} not found in ItemRegistry, looking in SpawnableRegistry instead`);
-            // Try to get the config from spawnable registry instead
-        }
-        
         // Get spawnable configuration - use the itemId as the spawnable type
         const config = SpawnableRegistry.getSpawnableType(itemId);
+        this.itemConfig = ItemRegistry.getType(itemId);
   
         // Store configuration
         this.config = {
@@ -64,17 +58,12 @@ export class Spawnable {
         loader.load(
             modelPath,
             (gltf) => {
-                console.log('Model loaded successfully');
                 this.model = gltf.scene;
                 // Scale the model appropriately
                 this.model.scale.set(this.config.scale, this.config.scale, this.config.scale);
                 // Position the model
                 this.model.position.copy(this.position);
                 
-                // Debug: Log model details
-                console.log('Model position:', this.model.position);
-                console.log('Model scale:', this.model.scale);
-                console.log('Model rotation:', this.model.rotation);
                 
                 // If we already have a scene, add the model immediately
                 if (this.scene) {
@@ -278,6 +267,8 @@ export class Spawnable {
                 quantity: this.quantity,
                 itemId: this.itemConfig.id
             };
+
+            console.log('Collecting item:', this.itemConfig);
             this.itemConfig.onCollect(player, collectionData);
         }
         

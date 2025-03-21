@@ -5,11 +5,10 @@ import { FoodProjectile } from './projectiles/FoodProjectile.js';
 import { Inventory } from './inventory/Inventory.js';
 import { Hotbar } from './ui/Hotbar.js';
 import { SpawnableRegistry } from './spawners/SpawnableRegistry.js';
-import { ItemRegistry } from './spawners/ItemRegistry.js';
-import { FoodRegistry } from './food/FoodRegistry.js';
+import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
 import { DebugManager } from './debug/DebugManager.js';
-
+import { addInventory } from './spawners/collect-functions/addInventory.js';
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -47,71 +46,20 @@ characterViewContainer.appendChild(crosshair);
 
 // Initialize inventory system
 const inventory = new Inventory();
-const hotbar = new Hotbar(inventory);
+const hotbar = new Hotbar(inventory, ItemRegistry);
+
 characterViewContainer.appendChild(hotbar.container);
 
-// Register food items with ItemRegistry if they don't already exist
-FoodRegistry.foodTypes.forEach(food => {
-    // Only register if the item doesn't already exist
-    if (!ItemRegistry.getItem(food.id)) {
-        ItemRegistry.registerItem({
-            id: food.id,
-            name: food.id.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-            modelPath: assetPath(`objects/${food.model}`), 
-            scale: food.scale * 2.0,
-            onCollect: (player, collectionData) => {
-                console.log(`Player collected ${food.id} x${collectionData.quantity}`);
-                if (player.inventory) {
-                    // Find first empty slot or slot with same item
-                    const slot = player.inventory.slots.findIndex(slot => 
-                        slot.item === null || (slot.item && slot.item.id === food.id)
-                    );
-                    
-                    if (slot !== -1) {
-                        const wasEmpty = player.inventory.slots[slot].item === null;
-                        
-                        // If slot is empty, set the item
-                        if (wasEmpty) {
-                            player.inventory.slots[slot].item = food;
-                            player.inventory.slots[slot].amount = collectionData.quantity;
-                        } else {
-                            // Add to existing stack
-                            player.inventory.slots[slot].amount += collectionData.quantity;
-                        }
-
-                        // Notify of amount change if callback exists
-                        if (player.inventory.onAmountChange) {
-                            player.inventory.onAmountChange(slot, player.inventory.slots[slot].amount);
-                        }
-
-                        // If this was the selected slot, update the preview
-                        if (slot === player.inventory.selectedSlot) {
-                            player.currentFoodItem = food;
-                            player.updatePreviewModel();
-                        }
-                        
-                        // If this was the first item collected, select it
-                        if (wasEmpty && player.inventory.slots.every((s, i) => i === slot || s.item === null)) {
-                            player.inventory.selectSlot(slot);
-                        }
-                    }
-                }
-            }
-        });
-    }
+ItemRegistry.forEach(item => {
+    item.onCollect = addInventory;
+    item.modelPath = assetPath(`objects/${item.model}`);
 });
 
-
-// Convert food registry to spawnables
-const spawnables = FoodRegistry.foodTypes.map(food => ({
-    id: food.id,
-    modelPath: assetPath(`objects/${food.model}`),
-    scale: food.scale * 2.0,
-    ref: food
-}));
-
-// 2. Then initialize SpawnableRegistry which depends on food registry and items
-SpawnableRegistry.initialize(spawnables);
+// all items are spawnables for now
+SpawnableRegistry.initialize(ItemRegistry.items.map(item => ({
+    ...item,
+    scale: item.scale * 2.0,
+})));
 
 // Some customization for spawnables
 SpawnableRegistry.updateSpawnableProperties(['carrot', 'cup-coffee'], {
@@ -126,7 +74,7 @@ const worldManager = new WorldManager(scene);
 let collidableObjects = [];
 
 // Initialize character
-const character = new Character(scene, camera, collidableObjects);
+const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
 // Create debug manager
 const debugManager = new DebugManager(scene, camera, renderer, character);
@@ -136,7 +84,7 @@ debugManager.setWorldManager(worldManager);
 character.inventory = inventory;
 inventory.onSelectionChange = (selectedIndex, selectedItem) => {
     character.currentFoodIndex = selectedIndex;
-    character.currentFoodItem = selectedItem;  // This is the food item from the inventory
+    character.currentItem = selectedItem;  // This is the food item from the inventory
     character.updatePreviewModel();
 };
 
