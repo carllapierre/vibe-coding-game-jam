@@ -30,6 +30,7 @@ export class DebugManager {
         // Add change tracking
         this.pendingChanges = new Map(); // Map<objectId, {model, index, originalState, currentState}>
         this.changeCount = 0;
+        this.deletedObjects = new Set(); // Track deleted objects by their changeId
         
         // Create transform controls
         this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
@@ -106,6 +107,7 @@ export class DebugManager {
             <div>4: Uniform Scale Mode</div>
             <div>Space: Lock Transform</div>
             <div>X: Cancel Transform</div>
+            <div>L: Delete Selected Object</div>
             <div>K: Save Transform</div>
         `;
         document.body.appendChild(this.debugOverlay);
@@ -217,6 +219,11 @@ export class DebugManager {
                     case 'k': 
                         console.log('K pressed, saving all changes...');
                         await this.saveAllChanges();
+                        break;
+                    case 'l':
+                        if (this.transformControls.object) {
+                            this.deleteSelectedObject();
+                        }
                         break;
                 }
             }
@@ -343,12 +350,24 @@ export class DebugManager {
     }
 
     toggleDebugMode() {
-        if (this.isDebugMode && this.pendingChanges.size > 0) {
+        if (this.isDebugMode && (this.pendingChanges.size > 0 || this.deletedObjects.size > 0)) {
             const shouldExit = confirm('You have unsaved changes. Exit debug mode anyway?');
             if (!shouldExit) {
                 return;
             }
+            // Restore visibility of deleted objects
+            this.deletedObjects.forEach(changeId => {
+                const [objectId, instanceIndex] = changeId.split('-');
+                const object = this.scene.getObjectByProperty('userData', { 
+                    id: objectId, 
+                    instanceIndex: parseInt(instanceIndex) 
+                });
+                if (object) {
+                    object.visible = true;
+                }
+            });
             this.pendingChanges.clear();
+            this.deletedObjects.clear();
             this.changeCount = 0;
         }
         
@@ -481,7 +500,9 @@ export class DebugManager {
     }
 
     async saveAllChanges() {
-        if (this.pendingChanges.size === 0) {
+        const totalChanges = this.pendingChanges.size + this.deletedObjects.size;
+        
+        if (totalChanges === 0) {
             this.saveFeedback.style.background = 'rgba(255, 165, 0, 0.7)';
             this.saveFeedback.textContent = 'No Changes to Save';
             this.showSaveFeedback();
@@ -491,7 +512,11 @@ export class DebugManager {
         let successCount = 0;
         let failCount = 0;
 
+        // Save transform changes
         for (const [changeId, change] of this.pendingChanges) {
+            // Skip if object is marked for deletion
+            if (this.deletedObjects.has(changeId)) continue;
+
             try {
                 const success = await this.worldManager.updateObjectInstance(
                     change.id,
@@ -512,8 +537,37 @@ export class DebugManager {
             }
         }
 
-        // Clear pending changes regardless of success (prevent stuck state)
+        // Process deletions
+        for (const changeId of this.deletedObjects) {
+            const [objectId, instanceIndex] = changeId.split('-');
+            try {
+                const success = await this.worldManager.deleteObjectInstance(
+                    objectId,
+                    parseInt(instanceIndex)
+                );
+                
+                if (success) {
+                    successCount++;
+                    // Remove the object from the scene
+                    const object = this.scene.getObjectByProperty('userData', { 
+                        id: objectId, 
+                        instanceIndex: parseInt(instanceIndex) 
+                    });
+                    if (object) {
+                        this.scene.remove(object);
+                    }
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Failed to delete object ${changeId}:`, error);
+                failCount++;
+            }
+        }
+
+        // Clear pending changes
         this.pendingChanges.clear();
+        this.deletedObjects.clear();
         this.changeCount = 0;
 
         // Show appropriate feedback
@@ -530,6 +584,36 @@ export class DebugManager {
         
         this.showSaveFeedback();
         setTimeout(() => this.updateChangeIndicator(), 1500);
+    }
+
+    deleteSelectedObject() {
+        const object = this.transformControls.object;
+        const objectId = object.userData.id;
+        const instanceIndex = object.userData.instanceIndex;
+        
+        if (objectId === undefined || instanceIndex === undefined) {
+            return;
+        }
+
+        const changeId = `${objectId}-${instanceIndex}`;
+        
+        // Add to deleted objects set
+        this.deletedObjects.add(changeId);
+        
+        // Hide the object but don't remove it yet (will be removed on save)
+        object.visible = false;
+        
+        // Detach transform controls
+        this.transformControls.detach();
+        
+        // Update change count and indicator
+        this.changeCount = this.pendingChanges.size + this.deletedObjects.size;
+        this.updateChangeIndicator();
+        
+        // Show deletion feedback
+        this.saveFeedback.style.background = 'rgba(255, 165, 0, 0.7)';
+        this.saveFeedback.textContent = 'Object marked for deletion - Press K to save';
+        this.showSaveFeedback();
     }
 
     // async loadWalls() {

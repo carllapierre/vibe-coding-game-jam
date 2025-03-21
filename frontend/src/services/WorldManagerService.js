@@ -53,6 +53,8 @@ class WorldManagerService {
                 spawners: worldData.spawners || []
             };
 
+            console.log('Attempting to save world data:', dataToSave);
+
             const response = await fetch(`${this.apiHost}/api/world`, {
                 method: 'POST',
                 headers: {
@@ -62,14 +64,23 @@ class WorldManagerService {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to save world data: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('Server response not OK:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseText: errorText
+                });
+                throw new Error(`Failed to save world data: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
             const result = await response.json();
-            console.log(result.message);
+            console.log('Save response:', result);
             return true;
         } catch (error) {
-            console.error('Error saving world data:', error);
+            console.error('Error saving world data:', {
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }

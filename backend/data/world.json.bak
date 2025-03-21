@@ -8,10 +8,13 @@
             "id": "wall",
             "instances": [
                 {
-                    "x": -10,
+                    "x": -17.78267522269275,
                     "y": 0,
                     "z": -10,
-                    "rotationY": 0
+                    "rotationY": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "scaleZ": 1
                 },
                 {
                     "x": -10,

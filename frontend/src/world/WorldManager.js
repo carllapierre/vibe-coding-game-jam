@@ -110,6 +110,70 @@ export class WorldManager {
         }
     }
 
+    async deleteObjectInstance(objectId, instanceIndex) {
+        if (!this.worldData || !this.worldData.objects) {
+            console.error('No world data or objects array available');
+            return false;
+        }
+
+        console.log('Attempting to delete object:', { objectId, instanceIndex });
+
+        const objectIndex = this.worldData.objects.findIndex(obj => obj.id === objectId);
+        if (objectIndex === -1) {
+            console.error('Object not found in world data:', objectId);
+            return false;
+        }
+
+        const objectData = this.worldData.objects[objectIndex];
+        if (!objectData.instances[instanceIndex]) {
+            console.error('Instance not found:', { objectId, instanceIndex });
+            return false;
+        }
+
+        console.log('Found object to delete:', {
+            objectId,
+            instanceIndex,
+            totalInstances: objectData.instances.length
+        });
+
+        // Remove the instance from the array
+        objectData.instances.splice(instanceIndex, 1);
+
+        // If no instances left, remove the entire object entry
+        if (objectData.instances.length === 0) {
+            console.log('Removing entire object as no instances remain:', objectId);
+            this.worldData.objects.splice(objectIndex, 1);
+        }
+
+        // Remove from collidable objects
+        const collidableIndex = this.collidableObjects.findIndex(obj => 
+            obj.config.id === objectId && obj.object.userData.instanceIndex === instanceIndex
+        );
+        
+        if (collidableIndex !== -1) {
+            console.log('Removing from collidable objects:', collidableIndex);
+            this.collidableObjects.splice(collidableIndex, 1);
+        } else {
+            console.warn('Object not found in collidable objects:', { objectId, instanceIndex });
+        }
+
+        // Save the changes to the server
+        try {
+            console.log('Saving world data after deletion...');
+            await this.saveWorldData();
+            console.log(`Successfully deleted object instance: ${objectId} [${instanceIndex}]`);
+            return true;
+        } catch (error) {
+            console.error('Failed to delete object instance:', {
+                objectId,
+                instanceIndex,
+                error: error.message,
+                stack: error.stack
+            });
+            return false;
+        }
+    }
+
     async loadModel(path) {
         // Check cache first
         if (this.modelCache.has(path)) {
