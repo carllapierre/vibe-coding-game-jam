@@ -136,7 +136,7 @@ function animate() {
     FoodProjectile.updateAll();
 
     // Update world (including spawners and check for item collection)
-    worldManager.update(character);
+    worldManager.update(character, camera);
 
     renderer.render(scene, camera);
 }

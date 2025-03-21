@@ -16,6 +16,14 @@ export class WorldManager {
         
         // Cache for model loading
         this.modelCache = new Map();
+        
+        // Frustum culling
+        this.frustum = new THREE.Frustum();
+        this.projScreenMatrix = new THREE.Matrix4();
+        this.frustumCullingEnabled = true;
+        this.cullingDistance = 100; // Maximum distance for objects to be visible
+        this.visibilityUpdateFrequency = 5; // Update visibility every N frames
+        this.frameCount = 0;
     }
 
     get scaleFactor() {
@@ -72,7 +80,7 @@ export class WorldManager {
         }
     }
 
-    update(character) {
+    update(character, camera) {
         // Update all spawners
         this.spawners.forEach((spawner, index) => {
             if (!spawner) {
@@ -91,6 +99,91 @@ export class WorldManager {
                 console.error(`Error updating spawner ${index}:`, error);
             }
         });
+        
+        // Update frustum culling if a camera is provided
+        if (camera && this.frustumCullingEnabled) {
+            this.frameCount++;
+            if (this.frameCount % this.visibilityUpdateFrequency === 0) {
+                this.updateObjectVisibility(camera);
+                this.frameCount = 0;
+            }
+        }
+    }
+    
+    updateObjectVisibility(camera) {
+        // Update the frustum
+        this.projScreenMatrix.multiplyMatrices(
+            camera.projectionMatrix, 
+            camera.matrixWorldInverse
+        );
+        this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+        
+        // Get camera position for distance culling
+        const cameraPosition = camera.position;
+        
+        // Check each object against the frustum
+        this.collidableObjects.forEach(collidableObj => {
+            if (!collidableObj.object) return;
+            
+            const object = collidableObj.object;
+            const box = collidableObj.box;
+            
+            // Skip objects without a bounding box
+            if (!box) return;
+            
+            // Create points for the box corners
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            
+            // Get the distance to the camera
+            const distance = center.distanceTo(cameraPosition);
+            
+            // Skip tiny objects that are far away
+            const size = box.getSize(new THREE.Vector3());
+            const maxDimension = Math.max(size.x, size.y, size.z);
+            const isTiny = maxDimension < 0.5 && distance > this.cullingDistance / 2;
+            
+            // Check if the bounding box is in the frustum and within culling distance
+            const isInFrustum = this.frustum.intersectsBox(box) && 
+                               distance < this.cullingDistance;
+                               
+            // Set visibility
+            object.visible = isInFrustum && !isTiny;
+            
+            // Also update visibility of any child meshes
+            if (object.traverse) {
+                object.traverse(child => {
+                    if (child.isMesh) {
+                        child.visible = isInFrustum && !isTiny;
+                    }
+                });
+            }
+        });
+    }
+    
+    setFrustumCullingDistance(distance) {
+        this.cullingDistance = distance;
+    }
+    
+    toggleFrustumCulling(enabled) {
+        this.frustumCullingEnabled = enabled;
+        
+        // If disabled, make all objects visible again
+        if (!enabled) {
+            this.collidableObjects.forEach(collidableObj => {
+                if (collidableObj.object) {
+                    collidableObj.object.visible = true;
+                    
+                    if (collidableObj.object.traverse) {
+                        collidableObj.object.traverse(child => {
+                            if (child.isMesh) {
+                                child.visible = true;
+                            }
+                        });
+                    }
+                }
+            });
+        }
     }
 
     getCollidableObjects() {
