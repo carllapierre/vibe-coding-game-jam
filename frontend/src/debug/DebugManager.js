@@ -516,7 +516,7 @@ export class DebugManager {
                     if (!previewContainer) continue;
                     
                     // Use assetPath helper to get the correct path
-                    const modelPath = assetPath(this.modelBasePath + item.model);
+                    const modelPath = ObjectRegistry.getModelPath(item.id);
                     console.log(`Loading preview for ${item.id} from: ${modelPath}`);
                     
                     // Create a new scene for this preview
@@ -950,12 +950,6 @@ export class DebugManager {
                 this.worldManager.modelLoader = this.modelLoader;
             }
             
-            // Store basePath if not set
-            if (!this.worldManager.modelBasePath) {
-                console.log('Setting modelBasePath on worldManager');
-                this.worldManager.modelBasePath = this.modelBasePath;
-            }
-            
             // Backup the worldManager for debugging
             if (this.worldManager.worldData && this.worldManager.worldData.settings) {
                 console.log('World data settings available:', this.worldManager.worldData.settings);
@@ -977,7 +971,7 @@ export class DebugManager {
                     }
                     
                     // Get the full path to the model using assetPath helper
-                    const modelPath = assetPath(this.modelBasePath + modelInfo.model);
+                    const modelPath = ObjectRegistry.getModelPath(objectId);
                     console.log(`Loading model from: ${modelPath}`);
                     
                     return new Promise((resolve, reject) => {
@@ -1093,15 +1087,6 @@ export class DebugManager {
                     console.error(`Error updating object: ${error.message}`);
                     return false;
                 }
-            };
-        }
-        
-        // Helper method to get model path
-        if (typeof this.worldManager.getModelPathForItem !== 'function') {
-            this.worldManager.getModelPathForItem = (objectId) => {
-                const modelInfo = ObjectRegistry.items.find(item => item.id === objectId);
-                if (!modelInfo) return null;
-                return assetPath(this.modelBasePath + modelInfo.model);
             };
         }
     }

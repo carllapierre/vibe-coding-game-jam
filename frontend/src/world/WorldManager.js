@@ -361,7 +361,7 @@ export class WorldManager {
                 return;
             }
 
-            const modelPath = this.worldData.settings.modelBasePath + registryItem.model;
+            const modelPath = ObjectRegistry.getModelPath(objectData.id);
             const gltf = await this.loadModel(modelPath);
             
             // Create instances

@@ -1,6 +1,8 @@
 import { Registry } from '../core/Registry.js';
-
+import { assetPath } from '../utils/pathHelper.js';
 export class ObjectRegistry extends Registry {
+    static DEFAULT_PATH = 'scene/';
+    
     static items = [
         // Walls and Structure
         { id: 'wall', model: 'wall.glb', scale: 1.0 },
@@ -26,5 +28,21 @@ export class ObjectRegistry extends Registry {
         // Shopping Equipment
         { id: 'shopping-basket', model: 'shopping-basket.glb', scale: 1.0 },
         { id: 'shopping-cart', model: 'shopping-cart.glb', scale: 1.0 },
+
+        // Objects
+        { id: 'wholer-ham', model: 'wholer-ham.glb', scale: 1.0, pathOverride: 'objects/' },
     ];
+
+    static getModelPath(id) {
+        const item = this.items.find(item => item.id === id);
+        if (!item) {
+            console.warn(`Object ${id} not found in registry`);
+            return null;
+        }
+
+        return item.pathOverride 
+            ? assetPath(item.pathOverride + item.model)
+            : assetPath(this.DEFAULT_PATH + item.model);
+    }
+    
 }
