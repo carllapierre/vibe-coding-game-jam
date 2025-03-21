@@ -792,7 +792,7 @@ export class DebugManager {
                         console.log('K pressed, saving all changes...');
                         await this.saveAllChanges();
                         break;
-                    case 'l':
+                    case 'delete':
                         if (this.transformControls.object) {
                             this.deleteSelectedObject();
                         }
