@@ -9,12 +9,23 @@ import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
 import { DebugManager } from './debug/DebugManager.js';
 import { addInventory } from './spawners/collect-functions/addInventory.js';
+import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
+
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+
+// Initialize post-processing
+const postProcessing = new PostProcessingComposer(renderer, scene, camera, {
+    brightness: 4.5,  // Increase brightness (1.0 is normal)
+    saturation: 1.1,  // Keep the default saturation
+    bloomStrength: 0.6,
+    bloomRadius: 0.8,
+    bloomThreshold: 0.2
+});
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -116,6 +127,7 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    postProcessing.resize(window.innerWidth, window.innerHeight);
 });
 
 // Animation loop
@@ -138,7 +150,8 @@ function animate() {
     // Update world (including spawners and check for item collection)
     worldManager.update(character, camera);
 
-    renderer.render(scene, camera);
+    // Render with post-processing effects
+    postProcessing.render();
 }
 
 animate(); 
