@@ -138,7 +138,9 @@ export class WorldManager {
             x: position.x,
             y: position.y,
             z: position.z,
+            rotationX: rotation.x,
             rotationY: rotation.y,
+            rotationZ: rotation.z,
             scaleX: scale ? scale.x / scaleFactor : 1,
             scaleY: scale ? scale.y / scaleFactor : 1,
             scaleZ: scale ? scale.z / scaleFactor : 1
@@ -284,7 +286,18 @@ export class WorldManager {
                     instance.y,
                     instance.z
                 );
-                objectInstance.rotation.y = instance.rotationY;
+                
+                // Apply rotation - handle both full rotation and legacy y-only rotation
+                if (instance.rotationX !== undefined && instance.rotationZ !== undefined) {
+                    objectInstance.rotation.set(
+                        instance.rotationX,
+                        instance.rotationY,
+                        instance.rotationZ
+                    );
+                } else {
+                    // Legacy support for y-only rotation
+                    objectInstance.rotation.y = instance.rotationY;
+                }
 
                 // Apply scale - use saved scale values if they exist, otherwise use registry scale
                 const baseScale = registryItem.scale || 1;
