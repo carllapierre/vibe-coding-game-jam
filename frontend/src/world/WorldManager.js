@@ -18,6 +18,10 @@ export class WorldManager {
         this.modelCache = new Map();
     }
 
+    get scaleFactor() {
+        return this.worldData?.settings?.scaleFactor;
+    }
+
     async loadWorld() {
         try {
             const worldData = await worldManagerService.getWorldData();
@@ -31,6 +35,9 @@ export class WorldManager {
 
     async saveWorldData() {
         try {
+            // Clean up null instances before saving
+            this.cleanupNullInstances();
+            
             const success = await worldManagerService.saveWorldData(this.worldData);
             if (success) {
                 console.log('World data saved successfully');
@@ -39,6 +46,29 @@ export class WorldManager {
         } catch (error) {
             console.error('Failed to save world:', error);
             throw error;
+        }
+    }
+
+    cleanupNullInstances() {
+        if (!this.worldData || !this.worldData.objects) return;
+        
+        // For each object in the world data
+        for (let i = 0; i < this.worldData.objects.length; i++) {
+            const objectData = this.worldData.objects[i];
+            
+            if (objectData.instances) {
+                // Filter out null instances
+                const cleanedInstances = objectData.instances.filter(instance => instance !== null);
+                
+                // If all instances were null, the object will be removed later
+                objectData.instances = cleanedInstances;
+            }
+            
+            // If no instances left after cleanup, mark for removal
+            if (!objectData.instances || objectData.instances.length === 0) {
+                this.worldData.objects.splice(i, 1);
+                i--; // Adjust index after removal
+            }
         }
     }
 
@@ -77,8 +107,29 @@ export class WorldManager {
     async updateObjectInstance(objectId, instanceIndex, position, rotation, scale) {
         if (!this.worldData || !this.worldData.objects) return false;
 
-        const objectData = this.worldData.objects.find(obj => obj.id === objectId);
-        if (!objectData || !objectData.instances[instanceIndex]) return false;
+        let objectData = this.worldData.objects.find(obj => obj.id === objectId);
+        
+        // If the object doesn't exist in worldData yet, create it
+        if (!objectData) {
+            console.log(`Creating new object entry for ${objectId} in worldData`);
+            objectData = {
+                id: objectId,
+                instances: []
+            };
+            this.worldData.objects.push(objectData);
+        }
+        
+        // If the instance doesn't exist yet, create an empty placeholder
+        if (!objectData.instances[instanceIndex]) {
+            console.log(`Creating new instance for ${objectId}[${instanceIndex}]`);
+            
+            // Ensure instances array is large enough (fill any gaps)
+            while (objectData.instances.length <= instanceIndex) {
+                objectData.instances.push(null);
+            }
+            
+            objectData.instances[instanceIndex] = {};
+        }
 
         // Update the instance data
         // When saving, divide by scaleFactor to get the actual scale values
@@ -118,9 +169,16 @@ export class WorldManager {
 
         console.log('Attempting to delete object:', { objectId, instanceIndex });
 
+        // Validate instanceIndex is a valid number
+        if (isNaN(instanceIndex) || instanceIndex === undefined) {
+            console.error('Invalid instance index:', instanceIndex);
+            return false;
+        }
+
         const objectIndex = this.worldData.objects.findIndex(obj => obj.id === objectId);
         if (objectIndex === -1) {
             console.error('Object not found in world data:', objectId);
+            console.log('Available objects:', this.worldData.objects.map(obj => obj.id));
             return false;
         }
 
@@ -136,15 +194,11 @@ export class WorldManager {
             totalInstances: objectData.instances.length
         });
 
-        // Remove the instance from the array
-        objectData.instances.splice(instanceIndex, 1);
-
-        // If no instances left, remove the entire object entry
-        if (objectData.instances.length === 0) {
-            console.log('Removing entire object as no instances remain:', objectId);
-            this.worldData.objects.splice(objectIndex, 1);
-        }
-
+        // Set the instance to null rather than removing it
+        // This preserves indices for the current session
+        // The cleanup method will remove nulls when saving
+        objectData.instances[instanceIndex] = null;
+        
         // Remove from collidable objects
         const collidableIndex = this.collidableObjects.findIndex(obj => 
             obj.config.id === objectId && obj.object.userData.instanceIndex === instanceIndex
@@ -217,6 +271,11 @@ export class WorldManager {
             
             // Create instances
             objectData.instances.forEach((instance, index) => {
+                // Skip null instances
+                if (!instance) {
+                    return;
+                }
+                
                 const objectInstance = gltf.scene.clone();
                 
                 // Apply position and rotation
