@@ -28,6 +28,11 @@ export class Character {
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.canJump = true;
         this.playerRadius = 0.5;
+        
+        // Surface tracking for stable standing
+        this.lastSurfaceY = null;
+        this.surfaceMemoryTimeout = 100; // ms to remember a surface
+        this.lastSurfaceTime = 0;
 
         // Camera bobbing variables
         this.bobAmplitude = 0.25; // Reduced height of the bob for smoother motion
@@ -302,6 +307,11 @@ export class Character {
         
         // Check collision with each collidable object's meshes
         return this.collidableObjects.some(obj => {
+            // Skip invalid objects
+            if (!obj || !obj.box || !obj.meshes) {
+                return false;
+            }
+            
             // First do a quick bounding box check
             if (!obj.box.intersectsSphere(playerSphere)) {
                 return false;
@@ -309,22 +319,48 @@ export class Character {
             
             // If the bounding box intersects, do precise mesh collision detection
             return obj.meshes.some(mesh => {
-                // Cast rays in multiple directions from the player's position
+                if (!mesh || !mesh.isMesh) return false;
+                
+                // Focus on the most important directions for movement collision detection
+                // Use fewer rays for more predictable collision
                 const directions = [
-                    new THREE.Vector3(1, 0, 0),
-                    new THREE.Vector3(-1, 0, 0),
-                    new THREE.Vector3(0, 0, 1),
-                    new THREE.Vector3(0, 0, -1),
-                    new THREE.Vector3(1, 0, 1).normalize(),
-                    new THREE.Vector3(1, 0, -1).normalize(),
-                    new THREE.Vector3(-1, 0, 1).normalize(),
-                    new THREE.Vector3(-1, 0, -1).normalize()
+                    new THREE.Vector3(1, 0, 0),          // Right
+                    new THREE.Vector3(-1, 0, 0),         // Left
+                    new THREE.Vector3(0, 0, 1),          // Forward
+                    new THREE.Vector3(0, 0, -1),         // Backward
+                    new THREE.Vector3(0, 1, 0),          // Up
+                    new THREE.Vector3(0, -1, 0),         // Down
                 ];
+                
+                // Calculate distance from the bottom of the player to the object's top
+                const playerBottom = nextPosition.y - 2.0; // Player's feet position
+                
+                // Check if there's a vertical collision when falling onto an object
+                if (this.velocity.y < 0) {
+                    const verticalRay = new THREE.Raycaster(
+                        new THREE.Vector3(nextPosition.x, nextPosition.y - 1.0, nextPosition.z), 
+                        new THREE.Vector3(0, -1, 0)
+                    );
+                    const verticalHits = verticalRay.intersectObject(mesh);
+                    
+                    // If we're about to land on an object
+                    if (verticalHits.length > 0 && verticalHits[0].distance < 1.1) {
+                        return true;
+                    }
+                }
                 
                 return directions.some(dir => {
                     raycaster.set(nextPosition, dir);
                     const intersects = raycaster.intersectObject(mesh);
-                    return intersects.some(intersect => intersect.distance < this.playerRadius);
+                    
+                    // Only consider intersections within the player radius
+                    return intersects.some(intersect => {
+                        // For upward movement, we need a bit more clearance to prevent getting stuck
+                        if (dir.y > 0) {
+                            return intersect.distance < this.playerRadius * 0.9;
+                        }
+                        return intersect.distance < this.playerRadius * 0.9;
+                    });
                 });
             });
         });
@@ -334,16 +370,68 @@ export class Character {
         const raycaster = new THREE.Raycaster();
         const rayOrigin = this.camera.position.clone();
         const rayDirection = new THREE.Vector3(0, -1, 0);
-        raycaster.set(rayOrigin, rayDirection);
         
-        const intersects = [];
-        this.collidableObjects.forEach(obj => {
-            const intersectResults = raycaster.intersectObject(obj.object, true);
-            intersects.push(...intersectResults);
-        });
+        // Reduced offset size to prevent false detections
+        const offsets = [
+            new THREE.Vector3(0, 0, 0),                    // Center
+            new THREE.Vector3(this.playerRadius*0.4, 0, 0),           // Right
+            new THREE.Vector3(-this.playerRadius*0.4, 0, 0),          // Left
+            new THREE.Vector3(0, 0, this.playerRadius*0.4),           // Front
+            new THREE.Vector3(0, 0, -this.playerRadius*0.4),          // Back
+        ];
         
-        const standingDistance = 2.1;
-        return intersects.some(intersect => intersect.distance < standingDistance);
+        // Track the closest valid surface
+        let closestDistance = Infinity;
+        let foundSurface = false;
+        let surfaceY = null;
+        
+        // Test each ray
+        for (const offset of offsets) {
+            const testOrigin = rayOrigin.clone().add(offset);
+            raycaster.set(testOrigin, rayDirection);
+            
+            const intersects = [];
+            this.collidableObjects.forEach(obj => {
+                if (obj && obj.object) {
+                    const intersectResults = raycaster.intersectObject(obj.object, true);
+                    // Stricter filtering of valid intersections - only consider very close ones
+                    const validIntersects = intersectResults.filter(intersect => 
+                        testOrigin.y - intersect.point.y >= 0 && 
+                        intersect.distance < 2.05  // Reduced from 2.1 to be more precise
+                    );
+                    intersects.push(...validIntersects);
+                }
+            });
+            
+            if (intersects.length > 0) {
+                // Sort by distance to find closest
+                intersects.sort((a, b) => a.distance - b.distance);
+                if (intersects[0].distance < closestDistance) {
+                    closestDistance = intersects[0].distance;
+                    foundSurface = true;
+                    surfaceY = testOrigin.y - intersects[0].distance;
+                }
+            }
+        }
+        
+        // Update surface memory - only remember surfaces we're very close to
+        if (foundSurface && closestDistance < 2.05) {
+            this.lastSurfaceY = surfaceY;
+            this.lastSurfaceTime = Date.now();
+        } else if (this.lastSurfaceY !== null) {
+            // Check if we're still near the last detected surface
+            const timeSinceLastSurface = Date.now() - this.lastSurfaceTime;
+            if (timeSinceLastSurface < this.surfaceMemoryTimeout && 
+                Math.abs(this.camera.position.y - (this.lastSurfaceY + 2.0)) < 0.1) { // Stricter tolerance
+                // We're still close to the last surface and time hasn't expired
+                return true;
+            } else if (timeSinceLastSurface >= this.surfaceMemoryTimeout) {
+                // Memory expired, clear it
+                this.lastSurfaceY = null;
+            }
+        }
+        
+        return foundSurface;
     }
 
     update() {
@@ -359,37 +447,95 @@ export class Character {
     updateMovement() {
         const currentPosition = this.camera.position.clone();
         
-        // Apply gravity
+        // Check if we're standing on something first - but be more precise with ground checks
+        const isOnGround = this.camera.position.y <= 2.001;
+        const isOnObject = this.checkStandingOnObject();
+        
+        // Apply gravity first
         this.velocity.y -= this.gravity;
         
-        // Handle jump
-        if (this.keys[' '] && this.canJump) {
-            this.velocity.y = this.jumpForce;
-            this.canJump = false;
+        // Handle jumping logic separately from ground detection to make it more reliable
+        const wasOnGroundLastFrame = this.canJump;
+        
+        // Update jump flag - only if we're actually on a surface
+        if (isOnGround || isOnObject) {
+            this.canJump = true;
         }
         
-        // Vertical movement
-        const nextPositionY = currentPosition.clone();
-        nextPositionY.y += this.velocity.y;
+        // Process jump input with more lenient jumping conditions
+        if (this.keys[' ']) {
+            // If we can jump or were recently able to jump (small grace period for more responsive jumping)
+            if (this.canJump || wasOnGroundLastFrame) {
+                this.velocity.y = this.jumpForce;
+                this.canJump = false;
+                this.lastSurfaceY = null; // Clear surface memory when jumping
+                
+                // Small upward boost to clear objects more reliably
+                this.camera.position.y += 0.1;
+            }
+        }
         
-        if (this.checkCollision(nextPositionY)) {
+        // Vertical movement with improved positioning
+        if (isOnGround || isOnObject) {
+            // If we're on ground or an object, zero out velocity and prevent sinking
+            // Only zero out negative velocity to allow jumps to work
             if (this.velocity.y < 0) {
                 this.velocity.y = 0;
-                this.canJump = true;
-            } else if (this.velocity.y > 0) {
-                this.velocity.y = 0;
+            }
+            
+            if (isOnGround) {
+                // On the main ground level
+                this.camera.position.y = 2.0;
+            } else if (isOnObject && this.lastSurfaceY !== null) {
+                // Maintain exact position above the surface to prevent sinking or jerking
+                this.camera.position.y = this.lastSurfaceY + 2.0;
             }
         } else {
-            this.camera.position.y += this.velocity.y;
-        }
-        
-        // Ground check
-        if (this.camera.position.y < 2 || this.checkStandingOnObject()) {
-            if (this.camera.position.y < 2) {
-                this.camera.position.y = 2;
+            // We're in the air - apply normal physics
+            const nextPositionY = currentPosition.clone();
+            nextPositionY.y += this.velocity.y;
+            
+            if (this.checkCollision(nextPositionY)) {
+                if (this.velocity.y < 0) {
+                    // We're falling and hit something - find the exact surface
+                    const raycaster = new THREE.Raycaster();
+                    const rayOrigin = currentPosition.clone();
+                    const rayDirection = new THREE.Vector3(0, -1, 0);
+                    raycaster.set(rayOrigin, rayDirection);
+                    
+                    const intersects = [];
+                    this.collidableObjects.forEach(obj => {
+                        if (obj && obj.meshes && obj.meshes.length > 0) {
+                            obj.meshes.forEach(mesh => {
+                                if (mesh && mesh.isMesh) {
+                                    const intersectResults = raycaster.intersectObject(mesh);
+                                    intersects.push(...intersectResults);
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Find the closest intersection
+                    if (intersects.length > 0) {
+                        // Sort by distance
+                        intersects.sort((a, b) => a.distance - b.distance);
+                        // Set position exactly at the standing height above the surface
+                        const surfaceY = rayOrigin.y - intersects[0].distance;
+                        this.camera.position.y = surfaceY + 2.0;
+                        this.lastSurfaceY = surfaceY; // Remember this surface
+                        this.lastSurfaceTime = Date.now();
+                    }
+                    
+                    this.velocity.y = 0;
+                    this.canJump = true;
+                } else if (this.velocity.y > 0) {
+                    // Hit ceiling
+                    this.velocity.y = 0;
+                }
+            } else {
+                // No collision, normal movement
+                this.camera.position.y += this.velocity.y;
             }
-            this.velocity.y = 0;
-            this.canJump = true;
         }
 
         // Horizontal movement
