@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { ItemSpawner } from '../spawners/ItemSpawner.js';
 import worldManagerService from '../services/WorldManagerService.js';
+import { ObjectRegistry } from '../registries/ObjectRegistry.js';
 
 export class WorldManager {
     constructor(scene) {
@@ -73,16 +74,16 @@ export class WorldManager {
         });
     }
 
-    async updateWallInstance(modelName, instanceIndex, position, rotation, scale) {
-        if (!this.worldData || !this.worldData.walls) return false;
+    async updateObjectInstance(objectId, instanceIndex, position, rotation, scale) {
+        if (!this.worldData || !this.worldData.objects) return false;
 
-        const wallData = this.worldData.walls.find(wall => wall.model === modelName);
-        if (!wallData || !wallData.instances[instanceIndex]) return false;
+        const objectData = this.worldData.objects.find(obj => obj.id === objectId);
+        if (!objectData || !objectData.instances[instanceIndex]) return false;
 
         // Update the instance data
         // When saving, divide by scaleFactor to get the actual scale values
         const scaleFactor = this.worldData.settings.scaleFactor;
-        wallData.instances[instanceIndex] = {
+        objectData.instances[instanceIndex] = {
             x: position.x,
             y: position.y,
             z: position.z,
@@ -92,19 +93,19 @@ export class WorldManager {
             scaleZ: scale ? scale.z / scaleFactor : 1
         };
 
-        console.log(`Saving normalized scale for ${modelName}[${instanceIndex}]:`, {
-            x: wallData.instances[instanceIndex].scaleX,
-            y: wallData.instances[instanceIndex].scaleY,
-            z: wallData.instances[instanceIndex].scaleZ
+        console.log(`Saving normalized scale for ${objectId}[${instanceIndex}]:`, {
+            x: objectData.instances[instanceIndex].scaleX,
+            y: objectData.instances[instanceIndex].scaleY,
+            z: objectData.instances[instanceIndex].scaleZ
         });
 
         // Save the changes to the server
         try {
             await this.saveWorldData();
-            console.log(`Updated and saved wall instance: ${modelName} [${instanceIndex}]`);
+            console.log(`Updated and saved object instance: ${objectId} [${instanceIndex}]`);
             return true;
         } catch (error) {
-            console.error('Failed to save wall instance update:', error);
+            console.error('Failed to save object instance update:', error);
             return false;
         }
     }
@@ -129,68 +130,81 @@ export class WorldManager {
         return { box };
     }
 
-    async loadWalls() {
+    async loadObjects() {
         if (!this.worldData) {
             await this.loadWorld();
         }
+
+        // Initialize objects array if it doesn't exist
+        if (!this.worldData.objects) {
+            console.warn('No objects array found in world data, initializing empty array');
+            this.worldData.objects = [];
+        }
         
-        const promises = this.worldData.walls.map(async (wallData) => {
-            const modelPath = this.worldData.settings.modelBasePath + wallData.model;
+        const promises = this.worldData.objects.map(async (objectData) => {
+            const registryItem = ObjectRegistry.items.find(item => item.id === objectData.id);
+            if (!registryItem) {
+                console.warn(`Object ${objectData.id} not found in registry`);
+                return;
+            }
+
+            const modelPath = this.worldData.settings.modelBasePath + registryItem.model;
             const gltf = await this.loadModel(modelPath);
             
             // Create instances
-            wallData.instances.forEach((instance, index) => {
-                const wallInstance = gltf.scene.clone();
+            objectData.instances.forEach((instance, index) => {
+                const objectInstance = gltf.scene.clone();
                 
                 // Apply position and rotation
-                wallInstance.position.set(
+                objectInstance.position.set(
                     instance.x,
                     instance.y,
                     instance.z
                 );
-                wallInstance.rotation.y = instance.rotationY;
+                objectInstance.rotation.y = instance.rotationY;
 
-                // Apply scale - use saved scale values if they exist, otherwise use default scale
+                // Apply scale - use saved scale values if they exist, otherwise use registry scale
+                const baseScale = registryItem.scale || 1;
                 if (instance.scaleX !== undefined && instance.scaleY !== undefined && instance.scaleZ !== undefined) {
-                    console.log(`Applying saved scale for ${wallData.model}[${index}]:`, instance.scaleX, instance.scaleY, instance.scaleZ);
-                    wallInstance.scale.set(
-                        instance.scaleX * this.worldData.settings.scaleFactor,
-                        instance.scaleY * this.worldData.settings.scaleFactor,
-                        instance.scaleZ * this.worldData.settings.scaleFactor
+                    console.log(`Applying saved scale for ${objectData.id}[${index}]:`, instance.scaleX, instance.scaleY, instance.scaleZ);
+                    objectInstance.scale.set(
+                        instance.scaleX * this.worldData.settings.scaleFactor * baseScale,
+                        instance.scaleY * this.worldData.settings.scaleFactor * baseScale,
+                        instance.scaleZ * this.worldData.settings.scaleFactor * baseScale
                     );
                 } else {
-                    console.log(`No saved scale for ${wallData.model}[${index}], using default`);
-                    wallInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor);
+                    console.log(`No saved scale for ${objectData.id}[${index}], using default`);
+                    objectInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor * baseScale);
                 }
 
-                // Store model information for transform saving
-                wallInstance.userData.model = wallData.model;
-                wallInstance.userData.instanceIndex = index;
+                // Store object information for transform saving
+                objectInstance.userData.id = objectData.id;
+                objectInstance.userData.instanceIndex = index;
 
-                this.scene.add(wallInstance);
+                this.scene.add(objectInstance);
                 
                 // Update matrices for proper bounding box calculation
-                wallInstance.updateMatrixWorld(true);
+                objectInstance.updateMatrixWorld(true);
                 
                 // Create a bounding box for collision detection
-                const boxInfo = this.createBoundingBoxHelper(wallInstance);
+                const boxInfo = this.createBoundingBoxHelper(objectInstance);
                 
-                // Store the wall instance and its collision data with scale information
+                // Store the object instance and its collision data with scale information
                 this.collidableObjects.push({
-                    object: wallInstance,
+                    object: objectInstance,
                     box: boxInfo.box,
                     meshes: [], // Array to store actual meshes for collision
                     config: { 
                         ...instance, 
-                        model: wallData.model,
-                        scaleX: instance.scaleX || 1,
-                        scaleY: instance.scaleY || 1,
-                        scaleZ: instance.scaleZ || 1
+                        id: objectData.id,
+                        scaleX: instance.scaleX || baseScale,
+                        scaleY: instance.scaleY || baseScale,
+                        scaleZ: instance.scaleZ || baseScale
                     }
                 });
                 
-                // Collect all meshes from the wall instance for precise collision
-                wallInstance.traverse((child) => {
+                // Collect all meshes from the object instance for precise collision
+                objectInstance.traverse((child) => {
                     if (child.isMesh) {
                         this.collidableObjects[this.collidableObjects.length - 1].meshes.push(child);
                     }

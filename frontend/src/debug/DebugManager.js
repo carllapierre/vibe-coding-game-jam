@@ -303,13 +303,13 @@ export class DebugManager {
     async handleTransformSave(event) {
         if (this.worldManager && event.detail.object) {
             const object = event.detail.object;
-            const modelName = object.userData.model;
+            const objectId = object.userData.id;
             const index = object.userData.instanceIndex;
 
-            if (modelName !== undefined && index !== undefined) {
+            if (objectId !== undefined && index !== undefined) {
                 try {
-                    const success = await this.worldManager.updateWallInstance(
-                        modelName,
+                    const success = await this.worldManager.updateObjectInstance(
+                        objectId,
                         index,
                         object.position,
                         object.rotation,
@@ -320,7 +320,7 @@ export class DebugManager {
                         this.saveFeedback.style.background = 'rgba(0, 255, 0, 0.7)';
                         this.saveFeedback.textContent = 'Changes Saved!';
                         this.showSaveFeedback();
-                        console.log('Saved transform changes for', modelName, 'instance', index);
+                        console.log('Saved transform changes for', objectId, 'instance', index);
                     } else {
                         // Show error feedback
                         this.saveFeedback.style.background = 'rgba(255, 0, 0, 0.7)';
@@ -429,19 +429,19 @@ export class DebugManager {
     }
 
     recordChange(object) {
-        const modelName = object.userData.model;
+        const objectId = object.userData.id;
         const instanceIndex = object.userData.instanceIndex;
         
-        if (modelName === undefined || instanceIndex === undefined) {
+        if (objectId === undefined || instanceIndex === undefined) {
             return;
         }
 
-        const objectId = `${modelName}-${instanceIndex}`;
+        const changeId = `${objectId}-${instanceIndex}`;
         
-        if (!this.pendingChanges.has(objectId)) {
+        if (!this.pendingChanges.has(changeId)) {
             // Store the original state when first modifying an object
-            this.pendingChanges.set(objectId, {
-                model: modelName,
+            this.pendingChanges.set(changeId, {
+                id: objectId,
                 index: instanceIndex,
                 originalState: {
                     position: object.position.clone(),
@@ -456,7 +456,7 @@ export class DebugManager {
             });
         } else {
             // Update current state
-            const change = this.pendingChanges.get(objectId);
+            const change = this.pendingChanges.get(changeId);
             change.currentState.position.copy(object.position);
             change.currentState.rotation.copy(object.rotation);
             change.currentState.scale.copy(object.scale);
@@ -491,10 +491,10 @@ export class DebugManager {
         let successCount = 0;
         let failCount = 0;
 
-        for (const [objectId, change] of this.pendingChanges) {
+        for (const [changeId, change] of this.pendingChanges) {
             try {
-                const success = await this.worldManager.updateWallInstance(
-                    change.model,
+                const success = await this.worldManager.updateObjectInstance(
+                    change.id,
                     change.index,
                     change.currentState.position,
                     change.currentState.rotation,
@@ -507,7 +507,7 @@ export class DebugManager {
                     failCount++;
                 }
             } catch (error) {
-                console.error(`Failed to save changes for ${objectId}:`, error);
+                console.error(`Failed to save changes for ${changeId}:`, error);
                 failCount++;
             }
         }
@@ -532,73 +532,73 @@ export class DebugManager {
         setTimeout(() => this.updateChangeIndicator(), 1500);
     }
 
-    async loadWalls() {
-        if (!this.worldData) {
-            await this.loadWorld();
-        }
+    // async loadWalls() {
+    //     if (!this.worldData) {
+    //         await this.loadWorld();
+    //     }
         
-        const promises = this.worldData.walls.map(async (wallData) => {
-            const modelPath = this.worldData.settings.modelBasePath + wallData.model;
-            const gltf = await this.loadModel(modelPath);
+    //     const promises = this.worldData.walls.map(async (wallData) => {
+    //         const modelPath = this.worldData.settings.modelBasePath + wallData.model;
+    //         const gltf = await this.loadModel(modelPath);
             
-            // Create instances
-            wallData.instances.forEach((instance, index) => {
-                const wallInstance = gltf.scene.clone();
-                // Apply position, rotation, and scale
-                wallInstance.position.set(
-                    instance.x,
-                    instance.y,
-                    instance.z
-                );
-                wallInstance.rotation.y = instance.rotationY;
+    //         // Create instances
+    //         wallData.instances.forEach((instance, index) => {
+    //             const wallInstance = gltf.scene.clone();
+    //             // Apply position, rotation, and scale
+    //             wallInstance.position.set(
+    //                 instance.x,
+    //                 instance.y,
+    //                 instance.z
+    //             );
+    //             wallInstance.rotation.y = instance.rotationY;
 
-                // Apply individual scale if available, otherwise use default scale
-                if (instance.scaleX !== undefined && instance.scaleY !== undefined && instance.scaleZ !== undefined) {
-                    wallInstance.scale.set(
-                        instance.scaleX * this.worldData.settings.scaleFactor,
-                        instance.scaleY * this.worldData.settings.scaleFactor,
-                        instance.scaleZ * this.worldData.settings.scaleFactor
-                    );
-                } else {
-                    wallInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor);
-                }
+    //             // Apply individual scale if available, otherwise use default scale
+    //             if (instance.scaleX !== undefined && instance.scaleY !== undefined && instance.scaleZ !== undefined) {
+    //                 wallInstance.scale.set(
+    //                     instance.scaleX * this.worldData.settings.scaleFactor,
+    //                     instance.scaleY * this.worldData.settings.scaleFactor,
+    //                     instance.scaleZ * this.worldData.settings.scaleFactor
+    //                 );
+    //             } else {
+    //                 wallInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor);
+    //             }
 
-                // Store model information for transform saving
-                wallInstance.userData.model = wallData.model;
-                wallInstance.userData.instanceIndex = index;
+    //             // Store model information for transform saving
+    //             wallInstance.userData.model = wallData.model;
+    //             wallInstance.userData.instanceIndex = index;
 
-                this.scene.add(wallInstance);
+    //             this.scene.add(wallInstance);
                 
-                // Update matrices for proper bounding box calculation
-                wallInstance.updateMatrixWorld(true);
+    //             // Update matrices for proper bounding box calculation
+    //             wallInstance.updateMatrixWorld(true);
                 
-                // Create a bounding box for collision detection
-                const boxInfo = this.createBoundingBoxHelper(wallInstance);
+    //             // Create a bounding box for collision detection
+    //             const boxInfo = this.createBoundingBoxHelper(wallInstance);
                 
-                // Store the wall instance and its collision data
-                this.collidableObjects.push({
-                    object: wallInstance,
-                    box: boxInfo.box,
-                    meshes: [], // Array to store actual meshes for collision
-                    config: { 
-                        ...instance, 
-                        model: wallData.model,
-                        scaleX: instance.scaleX || 1,
-                        scaleY: instance.scaleY || 1,
-                        scaleZ: instance.scaleZ || 1
-                    }
-                });
+    //             // Store the wall instance and its collision data
+    //             this.collidableObjects.push({
+    //                 object: wallInstance,
+    //                 box: boxInfo.box,
+    //                 meshes: [], // Array to store actual meshes for collision
+    //                 config: { 
+    //                     ...instance, 
+    //                     model: wallData.model,
+    //                     scaleX: instance.scaleX || 1,
+    //                     scaleY: instance.scaleY || 1,
+    //                     scaleZ: instance.scaleZ || 1
+    //                 }
+    //             });
                 
-                // Collect all meshes from the wall instance for precise collision
-                wallInstance.traverse((child) => {
-                    if (child.isMesh) {
-                        this.collidableObjects[this.collidableObjects.length - 1].meshes.push(child);
-                    }
-                });
-            });
-        });
+    //             // Collect all meshes from the wall instance for precise collision
+    //             wallInstance.traverse((child) => {
+    //                 if (child.isMesh) {
+    //                     this.collidableObjects[this.collidableObjects.length - 1].meshes.push(child);
+    //                 }
+    //             });
+    //         });
+    //     });
 
-        await Promise.all(promises);
-        return this.collidableObjects;
-    }
+    //     await Promise.all(promises);
+    //     return this.collidableObjects;
+    // }
 } 

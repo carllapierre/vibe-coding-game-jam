@@ -91,8 +91,8 @@ inventory.onSelectionChange = (selectedIndex, selectedItem) => {
 // Load the world after all registries are initialized
 console.log("Loading world...");
 async function initializeWorld() {
-    // First load walls
-    await worldManager.loadWalls();
+    // Load all objects from the world
+    await worldManager.loadObjects();
     collidableObjects = worldManager.getCollidableObjects();
     
     // Update character's collidable objects reference
@@ -101,7 +101,7 @@ async function initializeWorld() {
     // Update FoodProjectile's static collidable objects
     FoodProjectile.updateCollidableObjects(collidableObjects);
     
-    // Initialize spawners after walls are loaded
+    // Initialize spawners after objects are loaded
     await worldManager.initializeSpawners();
     
     console.log("World loaded successfully");

@@ -11,6 +11,16 @@ class WorldManagerService {
         // } catch (error) {
         //     console.warn('Using default API host:', this.apiHost);
         // }
+
+        // Default world data structure
+        this.defaultWorldData = {
+            settings: {
+                modelBasePath: '/public/assets/scene/',
+                scaleFactor: 3.5
+            },
+            objects: [],
+            spawners: []
+        };
     }
 
     async getWorldData() {
@@ -19,21 +29,36 @@ class WorldManagerService {
             if (!response.ok) {
                 throw new Error(`Failed to fetch world data: ${response.statusText}`);
             }
-            return await response.json();
+            let data = await response.json();
+
+            // Ensure the world data has the required structure
+            return {
+                settings: data.settings || this.defaultWorldData.settings,
+                objects: data.objects || [],
+                spawners: data.spawners || []
+            };
         } catch (error) {
             console.error('Error fetching world data:', error);
-            throw error;
+            // Return default world data if fetch fails
+            return { ...this.defaultWorldData };
         }
     }
 
     async saveWorldData(worldData) {
         try {
+            // Ensure the world data has the required structure before saving
+            const dataToSave = {
+                settings: worldData.settings || this.defaultWorldData.settings,
+                objects: worldData.objects || [],
+                spawners: worldData.spawners || []
+            };
+
             const response = await fetch(`${this.apiHost}/api/world`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(worldData, null, 4)
+                body: JSON.stringify(dataToSave, null, 4)
             });
 
             if (!response.ok) {
