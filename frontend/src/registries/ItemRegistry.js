@@ -13,6 +13,8 @@ export class ItemRegistry extends Registry {
         { id: 'sausage', model: 'sausage.glb', scale: 0.6 },
         { id: 'sausage-half', model: 'sausage-half.glb', scale: 0.6 },
         { id: 'whole-ham', model: 'whole-ham.glb', scale: 0.7 },
+        { id: 'bacon-raw', model: 'bacon-raw.glb', scale: 0.6 },
+        { id: 'beef-raw', model: 'beef-raw.glb', scale: 0.6 },
 
         // Breads and Baked Goods
         { id: 'loaf-baguette', model: 'loaf-baguette.glb', scale: 0.6 },

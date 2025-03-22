@@ -4,7 +4,7 @@ import { Character } from './character/Character.js';
 import { FoodProjectile } from './projectiles/FoodProjectile.js';
 import { Inventory } from './inventory/Inventory.js';
 import { Hotbar } from './ui/Hotbar.js';
-import { SpawnableRegistry } from './spawners/SpawnableRegistry.js';
+import { SpawnableRegistry } from './registries/SpawnableRegistry.js';
 import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
 import { DebugManager } from './debug/DebugManager.js';
@@ -66,14 +66,16 @@ ItemRegistry.forEach(item => {
     item.modelPath = assetPath(`objects/${item.model}`);
 });
 
-// all items are spawnables for now
+// convert all items to spawnables
 SpawnableRegistry.initialize(ItemRegistry.items.map(item => ({
     ...item,
     scale: item.scale * 2.0,
+    quantity: 5,
 })));
 
 // Some customization for spawnables
 SpawnableRegistry.updateSpawnableProperties(['carrot', 'cup-coffee'], {
+    quantity: 1,
     glowColor: 0x65e553, //green
     shadowColor: 0x65e553,
     particleColor: 0x65e553,
@@ -100,7 +102,6 @@ inventory.onSelectionChange = (selectedIndex, selectedItem) => {
 };
 
 // Load the world after all registries are initialized
-console.log("Loading world...");
 async function initializeWorld() {
     // Load all objects from the world
     await worldManager.loadObjects();
@@ -113,9 +114,7 @@ async function initializeWorld() {
     FoodProjectile.updateCollidableObjects(collidableObjects);
     
     // Initialize spawners after objects are loaded
-    await worldManager.initializeSpawners();
-    
-    console.log("World loaded successfully");
+    await worldManager.initializeSpawners(character);
 }
 
 initializeWorld().catch(error => {

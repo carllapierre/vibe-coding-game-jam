@@ -147,7 +147,6 @@ export class Hotbar {
         if (itemConfig) {
             if (!this.slotModels[index]) {
                 // Load new model
-                console.log(itemData)
                 this.loader.load(assetPath(`objects/${itemConfig.model}`), (gltf) => {
                     const model = gltf.scene;
                     model.scale.multiplyScalar(itemConfig.scale * 3);

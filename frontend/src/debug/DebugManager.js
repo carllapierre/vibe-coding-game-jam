@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import { OrbitControls } from './../../node_modules/three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from './../../node_modules/three/examples/jsm/controls/TransformControls.js';
 import { ObjectRegistry } from '../registries/ObjectRegistry.js';
+import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { assetPath } from '../utils/pathHelper.js';
+import { ItemSpawner } from '../spawners/ItemSpawner.js';
+import worldManagerService from '../services/WorldManagerService.js';
 
 export class DebugManager {
     constructor(scene, camera, renderer, character) {
@@ -11,8 +14,31 @@ export class DebugManager {
         this.camera = camera;
         this.renderer = renderer;
         this.character = character;
-        this.isDebugMode = false;
+        
+        this.objectsContainer = document.getElementById('debug-objects-container');
+        this.categorySelect = document.getElementById('debug-category-filter');
+        this.objectSelect = document.getElementById('debug-object-select');
+        this.debugCatalog = document.getElementById('debug-catalog');
+        this.objectFilter = document.getElementById('debug-filter');
+        this.transformControlsMode = document.getElementById('transform-controls-mode');
+        this.catalogScrollArea = document.getElementById('catalog-scroll-area');
+        this.debugModeIndicator = document.getElementById('debug-mode-indicator');
+        this.saveFeedback = document.getElementById('save-feedback');
+        
+        this.debugMode = false;
+        this.objectCategories = {};
+        this.objectCatalogItems = {};
+        this.loadedPreviews = {};
+        this.pendingChanges = new Map();
+        this.largeIndexMapping = new Map(); // Map to track large timestamp indices to actual instance indices
+        this.changeCount = 0;
+        
+        this.transformControls = new TransformControls(camera, renderer.domElement);
+        this.scene.add(this.transformControls);
+        
+        this.selectedObject = null;
         this.worldManager = null;
+        this.spawnerVisuals = new Map();
         
         // Store original camera position and rotation
         this.originalCameraPosition = new THREE.Vector3();
@@ -294,13 +320,25 @@ export class DebugManager {
         this.itemsContainer.innerHTML = '';
         this.itemsContainer.innerHTML = '<style>::-webkit-scrollbar { display: none; }</style>';
         
+        // Add section title for objects
+        const objectsTitle = document.createElement('div');
+        objectsTitle.style.cssText = `
+            font-size: 14px;
+            font-weight: bold;
+            padding: 5px;
+            margin: 10px 0 5px 0;
+            border-bottom: 1px solid #555;
+        `;
+        objectsTitle.textContent = 'Objects';
+        this.itemsContainer.appendChild(objectsTitle);
+        
         // Add each object from the registry
         ObjectRegistry.items.forEach(item => {
-            console.log(`Adding catalog item: ${item.id}`);
             
             const itemElement = document.createElement('div');
             itemElement.classList.add('catalog-item');
             itemElement.dataset.id = item.id;
+            itemElement.dataset.type = 'object';
             itemElement.style.cssText = `
                 background: rgba(60, 60, 60, 0.8);
                 border-radius: 4px;
@@ -396,7 +434,128 @@ export class DebugManager {
             this.itemsContainer.appendChild(itemElement);
         });
         
-        console.log(`Populated catalog with ${this.itemsContainer.children.length} items`);
+        // Add section title for spawners
+        const spawnersTitle = document.createElement('div');
+        spawnersTitle.style.cssText = `
+            font-size: 14px;
+            font-weight: bold;
+            padding: 5px;
+            margin: 15px 0 5px 0;
+            border-bottom: 1px solid #555;
+        `;
+        spawnersTitle.textContent = 'Spawners';
+        this.itemsContainer.appendChild(spawnersTitle);
+        
+        // Add each spawner from the registry
+        SpawnerRegistry.items.forEach(item => {
+            
+            const itemElement = document.createElement('div');
+            itemElement.classList.add('catalog-item');
+            itemElement.dataset.id = item.id;
+            itemElement.dataset.type = 'spawner';
+            itemElement.style.cssText = `
+                background: rgba(60, 60, 60, 0.8);
+                border-radius: 4px;
+                padding: 10px;
+                cursor: pointer;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                transition: background 0.2s;
+                margin-bottom: 8px;
+                width: 100%;
+                box-sizing: border-box;
+            `;
+            
+            // Preview container for spawner
+            const previewContainer = document.createElement('div');
+            previewContainer.style.cssText = `
+                width: 100%;
+                height: 100px;
+                background: rgba(30, 30, 30, 0.5);
+                margin-bottom: 8px;
+                border-radius: 3px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                position: relative;
+            `;
+            
+            // Spawner icon
+            const placeholderText = document.createElement('div');
+            placeholderText.style.cssText = `
+                color: #aaa;
+                font-size: 32px;
+                text-align: center;
+            `;
+            placeholderText.textContent = '✨'; // Sparkles for spawner
+            
+            // Add cooldown info
+            const cooldownInfo = document.createElement('div');
+            cooldownInfo.style.cssText = `
+                color: #aaa;
+                font-size: 12px;
+                text-align: center;
+                position: absolute;
+                bottom: 5px;
+                width: 100%;
+            `;
+            cooldownInfo.textContent = `Cooldown: ${item.cooldown/1000}s`;
+            
+            previewContainer.appendChild(placeholderText);
+            previewContainer.appendChild(cooldownInfo);
+            
+            // Item name
+            const nameElement = document.createElement('div');
+            nameElement.textContent = item.id
+                .split('-')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+            nameElement.style.cssText = `
+                font-size: 12px;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                width: 100%;
+            `;
+            
+            // Item description (what it spawns)
+            const descElement = document.createElement('div');
+            descElement.textContent = `Spawns: ${item.items.map(i => i.split('-')[0]).join(', ')}`;
+            descElement.style.cssText = `
+                font-size: 10px;
+                color: #aaa;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                width: 100%;
+                margin-top: 2px;
+            `;
+            
+            itemElement.appendChild(previewContainer);
+            itemElement.appendChild(nameElement);
+            itemElement.appendChild(descElement);
+            
+            // Add click event for spawner placement
+            itemElement.addEventListener('click', () => {
+                this.placeSpawnerInWorld(item.id);
+            });
+            
+            // Hover effect
+            itemElement.addEventListener('mouseenter', () => {
+                itemElement.style.background = 'rgba(80, 80, 80, 0.8)';
+            });
+            
+            itemElement.addEventListener('mouseleave', () => {
+                itemElement.style.background = 'rgba(60, 60, 60, 0.8)';
+            });
+            
+            this.itemsContainer.appendChild(itemElement);
+        });
+        
     }
     
     toggleCatalog(show = null) {
@@ -517,7 +676,6 @@ export class DebugManager {
                     
                     // Use assetPath helper to get the correct path
                     const modelPath = ObjectRegistry.getModelPath(item.id);
-                    console.log(`Loading preview for ${item.id} from: ${modelPath}`);
                     
                     // Create a new scene for this preview
                     const scene = new THREE.Scene();
@@ -579,7 +737,6 @@ export class DebugManager {
                                 model: model
                             };
                             
-                            console.log(`Preview loaded for ${item.id}`);
                         } catch (error) {
                             console.error(`Error processing model for ${item.id}:`, error);
                         }
@@ -603,7 +760,6 @@ export class DebugManager {
     }
     
     async placeObjectInWorld(objectId) {
-        
         try {
             // Get model info from registry
             const itemInfo = ObjectRegistry.items.find(item => item.id === objectId);
@@ -636,12 +792,45 @@ export class DebugManager {
                 baseScale * worldScaleFactor
             );
             
-            console.log(`Placing object ${objectId} with scale:`, scale);
-            console.log(`Base item scale: ${baseScale}, World scale factor: ${worldScaleFactor}, Combined: ${baseScale * worldScaleFactor}`);
-            
-            // Generate a unique instance index
-            const timestamp = Date.now();
-            const instanceIndex = timestamp % 1000000;
+            // Get the current world data to determine next available instance index
+            let instanceIndex;
+            try {
+                const worldData = await worldManagerService.getWorldData();
+                const objectData = worldData.objects.find(obj => obj.id === objectId);
+                
+                if (objectData && objectData.instances) {
+                    // Find the next available index by looking for gaps or using the next number
+                    let maxIndex = -1;
+                    const usedIndices = new Set();
+                    
+                    objectData.instances.forEach((instance, idx) => {
+                        if (instance !== null) {
+                            usedIndices.add(idx);
+                            maxIndex = Math.max(maxIndex, idx);
+                        }
+                    });
+                    
+                    // Look for the first unused index
+                    for (let i = 0; i <= maxIndex + 1; i++) {
+                        if (!usedIndices.has(i)) {
+                            instanceIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    console.log(`Using next available index ${instanceIndex} for ${objectId}`);
+                } else {
+                    // If object doesn't exist yet, start with index 0
+                    instanceIndex = 0;
+                    console.log(`Object ${objectId} not found, using index 0`);
+                }
+            } catch (error) {
+                // Fallback to simple incrementing index if we can't get world data
+                console.warn("Couldn't determine next instance index, using fallback:", error);
+                instanceIndex = 0;
+            }
+
+            console.log(`Creating new instance of ${objectId} with index ${instanceIndex}`);
 
             // Create the object instance
             const success = await this.worldManager.createObjectInstance(
@@ -658,8 +847,7 @@ export class DebugManager {
                     if (object.userData.id === objectId && 
                         object.userData.instanceIndex === instanceIndex) {
                         
-                        console.log(`Found created object with scale:`, object.scale);
-                        
+                        console.log(`Found created object, attaching transform controls:`, object);
                         this.transformControls.detach();
                         this.transformControls.attach(object);
                         
@@ -863,14 +1051,69 @@ export class DebugManager {
         if (intersects.length > 0) {
             // Find the root object (the parent that represents the full model)
             let selectedObject = intersects[0].object;
-            while (selectedObject.parent && selectedObject.parent !== this.scene) {
-                selectedObject = selectedObject.parent;
+            
+            // Log what was hit for debugging
+            console.log('Selected object in raycaster:', selectedObject);
+            
+            // Find the parent object with userData.id and userData.instanceIndex
+            while (selectedObject && selectedObject !== this.scene) {
+                if (selectedObject.userData && 
+                    selectedObject.userData.id !== undefined && 
+                    selectedObject.userData.instanceIndex !== undefined) {
+                    break; // Found an identifiable parent
+                }
+                if (selectedObject.parent) {
+                    selectedObject = selectedObject.parent;
+                } else {
+                    break;
+                }
             }
             
+            // If we couldn't find a proper parent with ID and instance index,
+            // try to find it by traversing up from the hit object's parents and siblings
+            if (!selectedObject.userData || 
+                selectedObject.userData.id === undefined || 
+                selectedObject.userData.instanceIndex === undefined) {
+                
+                console.warn('Selected object does not have required userData properties, trying to find parent...');
+                
+                // Start from the original hit and walk up the tree
+                let parent = intersects[0].object;
+                while (parent && parent !== this.scene) {
+                    // Check siblings
+                    if (parent.parent) {
+                        for (const sibling of parent.parent.children) {
+                            if (sibling.userData && 
+                                sibling.userData.id !== undefined && 
+                                sibling.userData.instanceIndex !== undefined) {
+                                selectedObject = sibling;
+                                console.log('Found sibling with valid data:', selectedObject);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Move up to parent
+                    if (parent.parent) {
+                        parent = parent.parent;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            
+            // Log the final selected object
+            console.log('Final selected object:', selectedObject, 'userData:', selectedObject.userData);
+            
             // Prevent selecting the transform controls itself
-            if (!selectedObject.isTransformControls) {
+            if (!selectedObject.isTransformControls && 
+                selectedObject.userData && 
+                selectedObject.userData.id !== undefined &&
+                selectedObject.userData.instanceIndex !== undefined) {
                 this.transformControls.detach(); // Detach first to prevent any potential issues
                 this.transformControls.attach(selectedObject);
+            } else {
+                console.warn('Could not select a valid object');
             }
         } else {
             this.transformControls.detach();
@@ -974,61 +1217,97 @@ export class DebugManager {
                     const modelPath = ObjectRegistry.getModelPath(objectId);
                     console.log(`Loading model from: ${modelPath}`);
                     
+                    // First, update the worldData to include this new instance
+                    // This ensures it gets saved later
+                    try {
+                        // Get world data and ensure object exists
+                        if (!this.worldManager.worldData) {
+                            await this.worldManager.loadWorld();
+                        }
+                        
+                        let worldData = this.worldManager.worldData;
+                        let objectData = worldData.objects.find(obj => obj.id === objectId);
+                        
+                        if (!objectData) {
+                            console.log(`Creating new object entry for ${objectId} in world data`);
+                            objectData = {
+                                id: objectId,
+                                instances: []
+                            };
+                            worldData.objects.push(objectData);
+                        }
+                        
+                        // Ensure instances array exists
+                        if (!objectData.instances) {
+                            objectData.instances = [];
+                        }
+                        
+                        // Calculate normalized scale (divided by world scale factor)
+                        const worldScaleFactor = this.worldManager.scaleFactor || 1;
+                        const normalizedScale = {
+                            x: scale.x / worldScaleFactor,
+                            y: scale.y / worldScaleFactor,
+                            z: scale.z / worldScaleFactor
+                        };
+                        
+                        // Make sure array is big enough
+                        while (objectData.instances.length <= instanceIndex) {
+                            objectData.instances.push(null);
+                        }
+                        
+                        // Create new instance data
+                        objectData.instances[instanceIndex] = {
+                            x: position.x,
+                            y: position.y,
+                            z: position.z,
+                            rotationX: rotation.x,
+                            rotationY: rotation.y,
+                            rotationZ: rotation.z,
+                            scaleX: normalizedScale.x,
+                            scaleY: normalizedScale.y,
+                            scaleZ: normalizedScale.z
+                        };
+                        
+                        console.log(`Added instance to world data at index ${instanceIndex}`);
+                    } catch (error) {
+                        console.error('Error updating world data:', error);
+                        // Continue anyway to create the visual object
+                    }
+                    
                     return new Promise((resolve, reject) => {
                         this.modelLoader.load(
                             modelPath,
                             (gltf) => {
                                 const model = gltf.scene.clone();
                                 
-                                // Log original model scale before changes
-                                console.log(`Original model scale:`, model.scale.clone());
-                                
                                 // Apply position, rotation, and scale
                                 model.position.copy(position);
                                 model.rotation.copy(rotation);
+                                model.scale.copy(scale);
                                 
-                                // Get the base scale for this object type from registry
-                                const baseScale = modelInfo && modelInfo.scale ? modelInfo.scale : 1.0;
-                                
-                                // Apply scale, ensuring we account for the baseScale and worldScaleFactor
-                                if (scale) {
-                                    // If scale is provided directly (e.g. from duplication)
-                                    model.scale.copy(scale);
-                                } else {
-                                    // If creating from scratch, apply all scaling factors
-                                    const worldScaleFactor = this.getWorldScaleFactor();
-                                    model.scale.set(
-                                        baseScale * worldScaleFactor,
-                                        baseScale * worldScaleFactor,
-                                        baseScale * worldScaleFactor
-                                    );
-                                }
-                                
-                                // Log final model scale after changes
-                                console.log(`Final model scale:`, model.scale);
-                                
-                                // Add metadata for identification
+                                // Store metadata for later reference
                                 model.userData.id = objectId;
                                 model.userData.instanceIndex = instanceIndex;
-                                model.userData.model = modelInfo.model;
+                                model.userData.type = 'object';
                                 
                                 // Add to scene
                                 this.scene.add(model);
+                                console.log(`Added object to scene with ID ${objectId} and instance ${instanceIndex}`);
                                 
                                 resolve(true);
                             },
-                            // Progress callback
-                            (xhr) => {
-                                console.log(`${objectId} loading: ${Math.round(xhr.loaded / xhr.total * 100)}%`);
+                            (progress) => {
+                                // Loading progress
+                                console.log(`Loading ${objectId}: ${Math.round(progress.loaded / progress.total * 100)}%`);
                             },
                             (error) => {
-                                console.error(`Error loading model ${objectId}: ${error.message}`);
+                                console.error(`Error loading model ${objectId}:`, error);
                                 reject(error);
                             }
                         );
                     });
                 } catch (error) {
-                    console.error(`Error creating object instance: ${error.message}`);
+                    console.error(`Error creating object instance:`, error);
                     return false;
                 }
             };
@@ -1141,6 +1420,9 @@ export class DebugManager {
             const catalogInfo = document.createElement('div');
             catalogInfo.textContent = 'Press N: Open Object Catalog';
             this.debugOverlay.appendChild(catalogInfo);
+            
+            // Create visual indicators for existing spawners
+            this.createSpawnerVisuals();
         } else {
             // Restore camera state
             this.camera.position.copy(this.originalCameraPosition);
@@ -1163,12 +1445,109 @@ export class DebugManager {
 
             // Clear transform selection
             this.transformControls.detach();
+            
+            // Remove spawner visual indicators
+            this.removeSpawnerVisuals();
         }
 
         // Toggle hitbox visibility
         if (this.worldManager) {
             this.worldManager.toggleHitboxes(this.isDebugMode);
         }
+    }
+
+    // New method to create visual indicators for existing spawners
+    createSpawnerVisuals() {
+        // Check if worldManagerService is available and has loaded spawners
+        if (!worldManagerService || !worldManagerService.loadedSpawners) {
+            console.log('No spawners available to visualize');
+            return;
+        }
+        
+        console.log(`Creating visual indicators for ${worldManagerService.loadedSpawners.length} spawners`);
+        
+        // Remove any existing visualizers first
+        this.removeSpawnerVisuals();
+        
+        // For each spawner in the world, create a visual indicator
+        worldManagerService.loadedSpawners.forEach(spawner => {
+            try {
+                if (!spawner || !spawner.position) {
+                    console.warn('Invalid spawner found, skipping visualization');
+                    return;
+                }
+                
+                // Get spawner info from registry
+                let spawnerInfo = SpawnerRegistry.items.find(item => item.id === spawner.id);
+                if (!spawnerInfo) {
+                    console.warn(`Spawner type ${spawner.id} not found in registry, using default`);
+                    // Create a default dummy info if not found
+                    spawnerInfo = {
+                        id: spawner.id || 'unknown-spawner',
+                        cooldown: spawner.cooldown || 5000,
+                        items: spawner.itemIds || []
+                    };
+                }
+                
+                // Create visual representation
+                const visual = this.createSpawnerVisual(spawnerInfo);
+                
+                // Position at the spawner's location
+                visual.position.copy(spawner.position);
+                
+                // Add metadata for identification
+                visual.userData.type = 'spawner';
+                visual.userData.id = spawner.id;
+                visual.userData.instanceIndex = spawner.instanceIndex;
+                visual.userData.cooldown = spawner.cooldown;
+                visual.userData.items = spawner.itemIds || spawnerInfo.items;
+                visual.userData.isExistingSpawner = true;
+                visual.userData.spawnerReference = spawner;
+                
+                // Add a special name to find these visuals later
+                visual.name = 'spawner-visual-' + spawner.id + '-' + spawner.instanceIndex;
+                
+                // Add to scene
+                this.scene.add(visual);
+                
+                // If the spawner has a current spawnable, hide it
+                if (spawner.currentSpawnable && spawner.currentSpawnable.model) {
+                    spawner.currentSpawnable.model.visible = false;
+                }
+                
+                console.log(`Created visual for spawner ${spawner.id} at`, spawner.position);
+            } catch (error) {
+                console.error(`Error creating visual for spawner:`, error);
+            }
+        });
+    }
+
+    // New method to remove spawner visual indicators
+    removeSpawnerVisuals() {
+        // Find all objects with the spawner-visual name prefix
+        const visualsToRemove = [];
+        
+        this.scene.traverse(object => {
+            if (object.name && object.name.startsWith('spawner-visual-')) {
+                visualsToRemove.push(object);
+                
+                // If this visual has a reference to an actual spawner
+                if (object.userData.spawnerReference && object.userData.spawnerReference.currentSpawnable) {
+                    // Make the spawnable visible again
+                    const spawnable = object.userData.spawnerReference.currentSpawnable;
+                    if (spawnable.model) {
+                        spawnable.model.visible = true;
+                    }
+                }
+            }
+        });
+        
+        // Remove all found visuals
+        visualsToRemove.forEach(visual => {
+            this.scene.remove(visual);
+        });
+        
+        console.log(`Removed ${visualsToRemove.length} spawner visuals`);
     }
 
     update() {
@@ -1206,33 +1585,43 @@ export class DebugManager {
         const instanceIndex = object.userData.instanceIndex;
         
         if (objectId === undefined || instanceIndex === undefined) {
+            console.warn('Cannot record change for object without ID or instance index', object);
             return;
         }
 
         const changeId = `${objectId}-${instanceIndex}`;
+        console.log(`Recording transform change for ${objectId} [${instanceIndex}]`);
         
         if (!this.pendingChanges.has(changeId)) {
-            // Store the original state when first modifying an object
-            this.pendingChanges.set(changeId, {
+            // Store original and current state when first modifying an object
+            const change = {
                 id: objectId,
-                index: instanceIndex,
-                originalState: {
-                    position: object.position.clone(),
-                    rotation: object.rotation.clone(),
-                    scale: object.scale.clone()
-                },
-                currentState: {
-                    position: object.position.clone(),
-                    rotation: object.rotation.clone(),
-                    scale: object.scale.clone()
-                }
+                type: 'transform',
+                userData: { ...object.userData },
+                position: object.position.clone(),
+                rotation: object.rotation.clone(),
+                scale: object.scale.clone()
+            };
+            
+            this.pendingChanges.set(changeId, change);
+            console.log(`New transform change recorded: ${objectId} [${instanceIndex}]`, {
+                position: object.position.toArray(),
+                rotation: object.rotation.toArray(),
+                scale: object.scale.toArray()
             });
         } else {
-            // Update current state
+            // Update current state if it's not a delete operation
             const change = this.pendingChanges.get(changeId);
-            change.currentState.position.copy(object.position);
-            change.currentState.rotation.copy(object.rotation);
-            change.currentState.scale.copy(object.scale);
+            if (change.type !== 'delete') {
+                change.position = object.position.clone();
+                change.rotation = object.rotation.clone();
+                change.scale = object.scale.clone();
+                console.log(`Updated transform change: ${objectId} [${instanceIndex}]`, {
+                    position: object.position.toArray(),
+                    rotation: object.rotation.toArray(), 
+                    scale: object.scale.toArray()
+                });
+            }
         }
 
         this.changeCount = this.pendingChanges.size;
@@ -1254,116 +1643,375 @@ export class DebugManager {
     }
 
     async saveAllChanges() {
-        const totalChanges = this.pendingChanges.size + this.deletedObjects.size;
-        
-        if (totalChanges === 0) {
-            this.saveFeedback.style.background = 'rgba(255, 165, 0, 0.7)';
-            this.saveFeedback.textContent = 'No Changes to Save';
-            this.showSaveFeedback();
-            return;
-        }
-
-        let successCount = 0;
-        let failCount = 0;
-
-        // Save transform changes
-        for (const [changeId, change] of this.pendingChanges) {
-            // Skip if object is marked for deletion
-            if (this.deletedObjects.has(changeId)) continue;
-
-            try {
-                const success = await this.worldManager.updateObjectInstance(
-                    change.id,
-                    change.index,
-                    change.currentState.position,
-                    change.currentState.rotation,
-                    change.currentState.scale
-                );
-                
-                if (success) {
-                    successCount++;
-                } else {
-                    failCount++;
-                }
-            } catch (error) {
-                console.error(`Failed to save changes for ${changeId}:`, error);
-                failCount++;
-            }
-        }
-
-        // Process deletions
-        for (const changeId of this.deletedObjects) {
-            // Split at the last hyphen to handle IDs with hyphens
-            const lastHyphenIndex = changeId.lastIndexOf('-');
-            if (lastHyphenIndex === -1) {
-                console.error(`Invalid changeId format (no hyphen): ${changeId}`);
-                failCount++;
-                continue;
+        try {
+            console.log('Saving all debug changes...');
+            
+            // Process all pending changes
+            const pendingChanges = this.pendingChanges;
+            if (pendingChanges.size === 0) {
+                console.log('No changes to save');
+                return true;
             }
             
-            const objectId = changeId.substring(0, lastHyphenIndex);
-            const instanceIndexStr = changeId.substring(lastHyphenIndex + 1);
-            const instanceIndex = parseInt(instanceIndexStr);
+            // Get world manager instance
+            const worldManager = this.worldManager;
             
-            // Skip if we couldn't parse a valid instance index
-            if (isNaN(instanceIndex)) {
-                console.error(`Invalid instance index in changeId: ${changeId}`);
-                failCount++;
-                continue;
+            // Get current world data - this will be updated as we process changes
+            let worldData = await worldManagerService.getWorldData();
+            
+            // Ensure the spawners array exists
+            if (!worldData.spawners) {
+                worldData.spawners = [];
             }
             
-            try {
-                const success = await this.worldManager.deleteObjectInstance(
-                    objectId,
-                    instanceIndex
-                );
-                
-                if (success) {
-                    successCount++;
-                    // Remove the object from the scene
-                    const object = this.scene.getObjectByProperty('userData', { 
-                        id: objectId, 
-                        instanceIndex: instanceIndex 
-                    });
-                    if (object) {
-                        this.scene.remove(object);
+            // Convert Map to array for processing
+            const allChanges = Array.from(pendingChanges.values());
+            console.log(`Processing ${allChanges.length} changes`);
+            
+            let successCount = 0;
+            let failCount = 0;
+            
+            // First process all deletes to avoid conflicts
+            const deleteChanges = allChanges.filter(change => change.type === 'delete');
+            const transformChanges = allChanges.filter(change => change.type !== 'delete');
+            
+            // Process all deletions first
+            for (const change of deleteChanges) {
+                if (change.userData && change.userData.type === 'spawner') {
+                    // Handle spawner deletion
+                    console.log('Deleting spawner:', change.id, change.userData);
+                    try {
+                        // Find and remove the spawner from worldData
+                        const spawnerIndex = worldData.spawners.findIndex(
+                            s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                        );
+                        
+                        if (spawnerIndex !== -1) {
+                            console.log(`Removing spawner ${change.id} at index ${spawnerIndex} from world data`);
+                            worldData.spawners.splice(spawnerIndex, 1);
+                            
+                            // Clean up the actual spawner if it exists
+                            if (worldManagerService.loadedSpawners) {
+                                const spawnerKey = `${change.id}-${change.userData.instanceIndex}`;
+                                if (worldManagerService.loadedSpawners[spawnerKey]) {
+                                    console.log(`Cleaning up spawner instance ${spawnerKey}`);
+                                    
+                                    // Get the spawner that needs to be removed
+                                    const spawner = worldManagerService.loadedSpawners[spawnerKey];
+                                    
+                                    // If spawner has a cleanup method, call it
+                                    if (spawner.clearTimeouts) {
+                                        spawner.clearTimeouts();
+                                    }
+                                    
+                                    // If spawner has a current spawnable, clean it up
+                                    if (spawner.currentSpawnable) {
+                                        spawner.currentSpawnable.cleanup();
+                                    }
+                                    
+                                    // Remove from loadedSpawners
+                                    delete worldManagerService.loadedSpawners[spawnerKey];
+                                    
+                                    // Remove the visual from the scene (important!)
+                                    const visualName = `spawner-visual-${change.id}-${change.userData.instanceIndex}`;
+                                    const visual = this.scene.getObjectByName(visualName);
+                                    if (visual) {
+                                        console.log(`Removing spawner visual from scene: ${visualName}`);
+                                        this.scene.remove(visual);
+                                    }
+                                    
+                                    // Remove any actual spawner models from the scene
+                                    if (spawner.model) {
+                                        console.log(`Removing spawner model from scene`);
+                                        this.scene.remove(spawner.model);
+                                    }
+                                }
+                            }
+                            
+                            // Also remove the object that was marked for deletion
+                            const objectToDelete = this.findObjectWithUserData({
+                                id: change.id,
+                                instanceIndex: change.userData.instanceIndex,
+                                type: 'spawner'
+                            });
+                            
+                            if (objectToDelete) {
+                                console.log(`Removing marked spawner object from scene`);
+                                this.scene.remove(objectToDelete);
+                            }
+                            
+                            successCount++;
+                        } else {
+                            console.warn(`Could not find spawner ${change.id} (${change.userData.instanceIndex}) in world data`);
+                            failCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error deleting spawner: ${error.message}`);
+                        failCount++;
                     }
                 } else {
-                    failCount++;
+                    // Handle regular object deletion
+                    console.log('Deleting regular object:', change.id, change.userData.instanceIndex);
+                    try {
+                        // First delete from world data via the service
+                        const result = await worldManagerService.deleteObjectFromWorldData(change.id, change.userData.instanceIndex);
+                        
+                        if (result) {
+                            console.log(`Successfully removed object ${change.id} from world data`);
+                            
+                            // Then remove from scene if successful
+                            const objectToDelete = this.findObjectWithUserData({
+                                id: change.id,
+                                instanceIndex: change.userData.instanceIndex
+                            });
+                            
+                            if (objectToDelete) {
+                                console.log(`Removing object from scene:`, objectToDelete);
+                                this.scene.remove(objectToDelete);
+                                successCount++;
+                            } else {
+                                console.warn(`Object to delete not found in scene: ${change.id}:${change.userData.instanceIndex}`);
+                                // Still count as success since world data was updated
+                                successCount++;
+                            }
+                            
+                            // Get fresh world data after each deletion
+                            worldData = await worldManagerService.getWorldData();
+                        } else {
+                            console.error(`Failed to delete object ${change.id} from world data`);
+                            failCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to delete ${change.id}:`, error);
+                        failCount++;
+                    }
                 }
-            } catch (error) {
-                console.error(`Failed to delete object ${changeId}:`, error);
-                failCount++;
             }
-        }
-
-        // Clear pending changes
-        this.pendingChanges.clear();
-        this.deletedObjects.clear();
-        this.changeCount = 0;
-
-        // Show appropriate feedback
-        if (failCount === 0) {
-            this.saveFeedback.style.background = 'rgba(0, 255, 0, 0.7)';
-            this.saveFeedback.textContent = `Saved ${successCount} Changes Successfully`;
-        } else if (successCount === 0) {
+            
+            // Skip saving world data again if we've just processed deletions
+            // The deleteObjectFromWorldData method already saved the changes
+            if (deleteChanges.length > 0 && transformChanges.length === 0) {
+                // Clear changes after saving
+                this.pendingChanges.clear();
+                
+                // Show success message
+                this.saveFeedback.style.background = 'rgba(0, 255, 0, 0.7)';
+                this.saveFeedback.textContent = `Saved ${successCount} Changes Successfully`;
+                this.showSaveFeedback();
+                console.log('All changes saved successfully');
+                return true;
+            }
+            
+            // Then process all transform changes
+            for (const change of transformChanges) {
+                if (change.type === 'transform' && change.userData && change.userData.type === 'spawner') {
+                    // Handle spawner transform update
+                    console.log('Updating spawner position:', change.id, change.userData);
+                    try {
+                        // Find if this spawner already exists
+                        const existingIndex = worldData.spawners.findIndex(
+                            s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                        );
+                        
+                        // Create spawner data object
+                        const spawnerData = {
+                            id: change.id,
+                            instanceIndex: change.userData.instanceIndex,
+                            position: {
+                                x: change.position.x,
+                                y: change.position.y,
+                                z: change.position.z
+                            },
+                            items: Array.isArray(change.userData.items) ? change.userData.items : [change.userData.items],
+                            cooldown: change.userData.cooldown || 5000
+                        };
+                        
+                        // Update or add to world data
+                        if (existingIndex >= 0) {
+                            console.log(`Updating existing spawner at index ${existingIndex}`, spawnerData);
+                            worldData.spawners[existingIndex] = spawnerData;
+                        } else {
+                            console.log('Adding new spawner to world data', spawnerData);
+                            worldData.spawners.push(spawnerData);
+                        }
+                        
+                        // Update the actual spawner if it exists
+                        if (worldManagerService.loadedSpawners) {
+                            const spawnerKey = `${change.id}-${change.userData.instanceIndex}`;
+                            const spawner = worldManagerService.loadedSpawners[spawnerKey];
+                            if (spawner) {
+                                console.log(`Updating position of loaded spawner ${spawnerKey}`, change.position);
+                                spawner.position.copy(change.position);
+                            }
+                        }
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Error updating spawner: ${error.message}`);
+                        failCount++;
+                    }
+                } 
+                else if (change.type === 'transform') {
+                    // Handle regular object transform update
+                    console.log('Updating object transform:', change.id, change.userData.instanceIndex);
+                    try {
+                        // Find the object in the world data
+                        let objectData = worldData.objects.find(obj => obj.id === change.id);
+                        
+                        // If object doesn't exist yet, create it
+                        if (!objectData) {
+                            console.log(`Creating new object entry for ${change.id}`);
+                            objectData = {
+                                id: change.id,
+                                instances: []
+                            };
+                            worldData.objects.push(objectData);
+                        }
+                        
+                        // Ensure instances array exists
+                        if (!objectData.instances) {
+                            objectData.instances = [];
+                        }
+                        
+                        const instanceIndex = parseInt(change.userData.instanceIndex, 10);
+                        let actualIndex = instanceIndex;
+                        
+                        // For objects with very large timestamp-based indices (from newly placed objects)
+                        // we need to handle them specially
+                        if (instanceIndex > 100000) { // Threshold for timestamp-based indices
+                            console.log(`Large timestamp index detected: ${instanceIndex}`);
+                            
+                            // Check if we already have a mapping for this large index
+                            const mappingKey = `${change.id}-${instanceIndex}`;
+                            
+                            // If we don't have this object in our large index mapping, add it
+                            if (!this.largeIndexMapping) {
+                                this.largeIndexMapping = new Map();
+                            }
+                            
+                            if (this.largeIndexMapping.has(mappingKey)) {
+                                // Use the previously mapped index
+                                actualIndex = this.largeIndexMapping.get(mappingKey);
+                                console.log(`Using existing mapped index ${actualIndex} for large index ${instanceIndex}`);
+                            } else {
+                                // Create a new instance at the end of the array
+                                actualIndex = objectData.instances.length;
+                                this.largeIndexMapping.set(mappingKey, actualIndex);
+                                console.log(`Mapped large index ${instanceIndex} to new index ${actualIndex}`);
+                                
+                                // Add an empty object at this index
+                                objectData.instances.push({});
+                                
+                                // Find the object in the scene with this large index
+                                const sceneObject = this.findObjectWithUserData({
+                                    id: change.id,
+                                    instanceIndex: instanceIndex
+                                });
+                                
+                                // Update the object's userData to use the new, smaller index
+                                if (sceneObject) {
+                                    console.log(`Updating scene object's instanceIndex from ${instanceIndex} to ${actualIndex}`);
+                                    sceneObject.userData.instanceIndex = actualIndex;
+                                    
+                                    // Also update the change object to use the new index
+                                    change.userData.instanceIndex = actualIndex;
+                                    
+                                    // Update the pendingChanges map key
+                                    const oldChangeId = `${change.id}-${instanceIndex}`;
+                                    const newChangeId = `${change.id}-${actualIndex}`;
+                                    if (this.pendingChanges.has(oldChangeId)) {
+                                        const changeObj = this.pendingChanges.get(oldChangeId);
+                                        changeObj.userData.instanceIndex = actualIndex;
+                                        this.pendingChanges.delete(oldChangeId);
+                                        this.pendingChanges.set(newChangeId, changeObj);
+                                    }
+                                }
+                            }
+                        }
+                        else if (instanceIndex >= objectData.instances.length || !objectData.instances[instanceIndex]) {
+                            // For more normal indices, create new instances as needed
+                            console.log(`Instance ${instanceIndex} not found in array, creating new instance`);
+                            
+                            // Ensure array is large enough and instance exists
+                            while (objectData.instances.length <= instanceIndex) {
+                                objectData.instances.push(null);
+                            }
+                            objectData.instances[instanceIndex] = {};
+                        }
+                        
+                        console.log(`Updating object ${change.id} instance ${actualIndex}`);
+                        
+                        // Update position
+                        objectData.instances[actualIndex].x = change.position.x;
+                        objectData.instances[actualIndex].y = change.position.y;
+                        objectData.instances[actualIndex].z = change.position.z;
+                        
+                        // Update rotation
+                        objectData.instances[actualIndex].rotationX = change.rotation.x;
+                        objectData.instances[actualIndex].rotationY = change.rotation.y;
+                        objectData.instances[actualIndex].rotationZ = change.rotation.z;
+                        
+                        // Update scale - apply the world scale factor
+                        if (change.scale) {
+                            const scaleFactor = this.getWorldScaleFactor();
+                            objectData.instances[actualIndex].scaleX = change.scale.x / scaleFactor;
+                            objectData.instances[actualIndex].scaleY = change.scale.y / scaleFactor;
+                            objectData.instances[actualIndex].scaleZ = change.scale.z / scaleFactor;
+                        }
+                        
+                        console.log(`Updated object transform: ${change.id} [${actualIndex}]`, 
+                            objectData.instances[actualIndex]);
+                        
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Failed to update transform for ${change.id}:`, error);
+                        failCount++;
+                    }
+                }
+            }
+            
+            // Save the updated world data only if there are transform changes
+            if (transformChanges.length > 0) {
+                await worldManagerService.saveWorldData(worldData);
+            }
+            
+            // Clear changes after saving
+            this.pendingChanges.clear();
+            
+            // Show appropriate feedback
+            if (failCount === 0) {
+                this.saveFeedback.style.background = 'rgba(0, 255, 0, 0.7)';
+                this.saveFeedback.textContent = `Saved ${successCount} Changes Successfully`;
+            } else if (successCount === 0) {
+                this.saveFeedback.style.background = 'rgba(255, 0, 0, 0.7)';
+                this.saveFeedback.textContent = `Failed to Save ${failCount} Changes`;
+            } else {
+                this.saveFeedback.style.background = 'rgba(255, 165, 0, 0.7)';
+                this.saveFeedback.textContent = `Saved ${successCount}, Failed ${failCount}`;
+            }
+            
+            this.showSaveFeedback();
+            console.log('All changes saved successfully');
+            return true;
+        } catch (error) {
+            console.error('Failed to save debug changes:', error);
+            
+            // Show error feedback
             this.saveFeedback.style.background = 'rgba(255, 0, 0, 0.7)';
-            this.saveFeedback.textContent = `Failed to Save ${failCount} Changes`;
-        } else {
-            this.saveFeedback.style.background = 'rgba(255, 165, 0, 0.7)';
-            this.saveFeedback.textContent = `Saved ${successCount}, Failed ${failCount}`;
+            this.saveFeedback.textContent = `Error: ${error.message}`;
+            this.showSaveFeedback();
+            
+            return false;
         }
-        
-        this.showSaveFeedback();
-        setTimeout(() => this.updateChangeIndicator(), 1500);
     }
 
     deleteSelectedObject() {
         const object = this.transformControls.object;
+        if (!object) return;
+        
         const objectId = object.userData.id;
         const instanceIndex = object.userData.instanceIndex;
         
-        if (objectId === undefined || instanceIndex === undefined || isNaN(instanceIndex)) {
+        if (objectId === undefined || instanceIndex === undefined) {
             console.error('Cannot delete object with invalid ID or instance index', {
                 objectId,
                 instanceIndex
@@ -1371,21 +2019,39 @@ export class DebugManager {
             return;
         }
 
-        // Ensure consistent changeId format
+        // Create a consistent change ID format
         const changeId = `${objectId}-${instanceIndex}`;
-        console.log(`Marking object for deletion: ${changeId}`);
+        console.log(`Marking object for deletion: ${changeId}`, object);
         
-        // Add to deleted objects set
-        this.deletedObjects.add(changeId);
+        // Create a delete type change and add to pending changes
+        const deleteChange = {
+            id: objectId,
+            type: 'delete',
+            userData: {
+                ...object.userData,
+                instanceIndex: instanceIndex
+            }
+        };
         
-        // Hide the object but don't remove it yet (will be removed on save)
-        object.visible = false;
+        // Log details of the object being deleted
+        console.log('Object being deleted:', {
+            id: objectId,
+            instanceIndex: instanceIndex,
+            position: object.position.toArray(),
+            scale: object.scale.toArray()
+        });
+        
+        // Add to pending changes
+        this.pendingChanges.set(changeId, deleteChange);
+        
+        // Remove object from scene immediately for visual feedback
+        this.scene.remove(object);
         
         // Detach transform controls
         this.transformControls.detach();
         
-        // Update change count and indicator
-        this.changeCount = this.pendingChanges.size + this.deletedObjects.size;
+        // Update change indicator
+        this.changeCount = this.pendingChanges.size;
         this.updateChangeIndicator();
         
         // Show deletion feedback
@@ -1476,5 +2142,262 @@ export class DebugManager {
             this.saveFeedback.textContent = `Error: ${error.message}`;
             this.showSaveFeedback();
         }
+    }
+
+    // Add a new method for placing spawners
+    placeSpawnerInWorld(spawnerId) {
+        try {
+            // Get spawner info from registry
+            const spawnerInfo = SpawnerRegistry.items.find(item => item.id === spawnerId);
+            if (!spawnerInfo) throw new Error(`Spawner ${spawnerId} not found in registry`);
+            
+            // Placement location - in front of camera
+            const cameraDirection = new THREE.Vector3(0, 0, -1);
+            cameraDirection.applyQuaternion(this.camera.quaternion);
+            
+            // Place the spawner 5 units in front of the camera
+            const position = new THREE.Vector3().copy(this.camera.position).add(
+                cameraDirection.multiplyScalar(5)
+            );
+            
+            // Place on the ground if possible
+            position.y = 0;
+            
+            // Generate a unique instance index
+            const timestamp = Date.now();
+            const instanceIndex = timestamp % 1000000;
+
+            // Create a visual indicator for the spawner
+            const spawnerVisual = this.createSpawnerVisual(spawnerInfo);
+            spawnerVisual.position.copy(position);
+            
+            // Add metadata for identification
+            spawnerVisual.userData.type = 'spawner';
+            spawnerVisual.userData.id = spawnerId;
+            spawnerVisual.userData.instanceIndex = instanceIndex;
+            spawnerVisual.userData.cooldown = spawnerInfo.cooldown;
+            spawnerVisual.userData.items = spawnerInfo.items;
+            
+            // Add to scene
+            this.scene.add(spawnerVisual);
+            
+            // Attach transform controls
+            this.transformControls.detach();
+            this.transformControls.attach(spawnerVisual);
+            
+            // Record this as a change
+            this.recordChange(spawnerVisual);
+            
+            // Show feedback
+            this.saveFeedback.style.background = 'rgba(0, 255, 0, 0.7)';
+            this.saveFeedback.textContent = `Added ${spawnerId} spawner - Press K to save`;
+            this.showSaveFeedback();
+            
+            return true;
+        } catch (error) {
+            console.error(`Error placing spawner ${spawnerId}:`, error);
+            this.saveFeedback.style.background = 'rgba(255, 0, 0, 0.7)';
+            this.saveFeedback.textContent = `Error: ${error.message}`;
+            this.showSaveFeedback();
+            return false;
+        }
+    }
+
+    // Helper method to create a visual representation of a spawner
+    createSpawnerVisual(spawnerInfo) {
+        // Create a group to hold all visual elements
+        const group = new THREE.Group();
+        
+        // Create a base (cylinder) for the spawner
+        const baseGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
+        const baseMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x3366ff,
+            transparent: true,
+            opacity: 0.7
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 0.05; // Half the height
+        group.add(base);
+        
+        // Create a vertical beam
+        const beamGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
+        const beamMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x3366ff,
+            transparent: true,
+            opacity: 0.5
+        });
+        const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+        beam.position.y = 1; // Half the beam height
+        group.add(beam);
+        
+        // Create a top emitter
+        const emitterGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const emitterMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.7
+        });
+        const emitter = new THREE.Mesh(emitterGeometry, emitterMaterial);
+        emitter.position.y = 2; // At the top of the beam
+        group.add(emitter);
+        
+        // Add particles for visual effect
+        const particleCount = 20;
+        const particleGeometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            const radius = 0.4;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            
+            positions[i3] = Math.sin(theta) * Math.cos(phi) * radius;
+            positions[i3 + 1] = 2 + Math.random() * 0.3; // Position near emitter
+            positions[i3 + 2] = Math.sin(theta) * Math.sin(phi) * radius;
+        }
+        
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        const particleMaterial = new THREE.PointsMaterial({
+            color: 0x00ffff,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        group.add(particles);
+        
+        // Add spawner info as text
+        const spawnerLabel = this.createTextSprite(
+            spawnerInfo.id,
+            { fontsize: 80, fontface: 'Arial', borderColor: { r:0, g:0, b:0, a:1.0 } }
+        );
+        spawnerLabel.position.set(0, 2.3, 0);
+        group.add(spawnerLabel);
+        
+        // Animate particles
+        const animateParticles = () => {
+            if (!group.parent) {
+                // If group was removed from scene, stop animation
+                return;
+            }
+            
+            const positions = particles.geometry.attributes.position.array;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                // Move particles upward
+                positions[i3 + 1] += 0.01;
+                
+                // Reset particles that go too high
+                if (positions[i3 + 1] > 2.5) {
+                    positions[i3 + 1] = 2;
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+            
+            requestAnimationFrame(animateParticles);
+        };
+        
+        // Start animation
+        animateParticles();
+        
+        return group;
+    }
+
+    // Helper function to create text sprites for labels
+    createTextSprite(message, parameters) {
+        if (parameters === undefined) parameters = {};
+        
+        const fontface = parameters.fontface || 'Arial';
+        const fontsize = parameters.fontsize || 70;
+        const borderThickness = parameters.borderThickness || 4;
+        const borderColor = parameters.borderColor || { r:0, g:0, b:0, a:1.0 };
+        const backgroundColor = parameters.backgroundColor || { r:255, g:255, b:255, a:1.0 };
+        const textColor = parameters.textColor || { r:0, g:0, b:255, a:1.0 };
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = "Bold " + fontsize + "px " + fontface;
+        
+        // Get text metrics
+        const metrics = context.measureText(message);
+        const textWidth = metrics.width;
+        
+        // Canvas dimensions
+        canvas.width = textWidth + borderThickness * 2;
+        canvas.height = fontsize * 1.4 + borderThickness * 2;
+        
+        // Background color
+        context.fillStyle = "rgba(" + backgroundColor.r + "," + backgroundColor.g + ","
+                          + backgroundColor.b + "," + backgroundColor.a + ")";
+        
+        // Border color
+        context.strokeStyle = "rgba(" + borderColor.r + "," + borderColor.g + ","
+                            + borderColor.b + "," + borderColor.a + ")";
+        
+        context.lineWidth = borderThickness;
+        
+        // Draw rounded rectangle
+        this.roundRect(context, borderThickness/2, borderThickness/2, 
+                     canvas.width - borderThickness, canvas.height - borderThickness, 6);
+        
+        // Text color
+        context.fillStyle = "rgba(" + textColor.r + "," + textColor.g + ","
+                          + textColor.b + "," + textColor.a + ")";
+        
+        context.font = "Bold " + fontsize + "px " + fontface;
+        context.fillText(message, borderThickness, fontsize + borderThickness);
+        
+        // Create texture
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true;
+        
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.scale.set(1.0, 0.5, 1.0);
+        
+        return sprite;
+    }
+
+    // Helper function to draw rounded rectangles
+    roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // Find objects by property - replace all getObjectByProperty calls with this helper function
+    findObjectWithUserData(criteria) {
+        let foundObject = null;
+        
+        // Recursively check all objects in the scene
+        this.scene.traverse(object => {
+            if (foundObject) return; // Already found
+            
+            // Check if this object's userData matches all criteria
+            const matches = Object.entries(criteria).every(([key, value]) => {
+                return object.userData[key] === value;
+            });
+            
+            if (matches) {
+                foundObject = object;
+            }
+        });
+        
+        return foundObject;
     }
 } 

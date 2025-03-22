@@ -367,7 +367,7 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": -5.599281931055982,
+                    "x": -5.113141640641893,
                     "y": 0,
                     "z": -4.699983336169632
                 },
@@ -378,7 +378,7 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": -2.8093544885419934,
+                    "x": -2.6785468931979666,
                     "y": 0,
                     "z": -4.699983336169632
                 },
@@ -411,7 +411,7 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": 2.2427292541132458,
+                    "x": 2.192303493758274,
                     "y": 0,
                     "z": -9.989380457747394
                 },
@@ -433,7 +433,7 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": -2.7126016741828742,
+                    "x": -2.684786710558763,
                     "y": 0,
                     "z": -9.989380457747394
                 },
@@ -444,7 +444,7 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": -5.464689540465129,
+                    "x": -5.122195985967286,
                     "y": 0,
                     "z": -9.989380457747394
                 }
@@ -453,17 +453,6 @@
         {
             "id": "shelf-boxes",
             "instances": [
-                {
-                    "rotationX": 0,
-                    "rotationY": 0,
-                    "rotationZ": 0,
-                    "scaleX": 1,
-                    "scaleY": 1,
-                    "scaleZ": 1,
-                    "x": 7.800671195138431,
-                    "y": 0,
-                    "z": -4.56384554194335
-                },
                 {
                     "rotationX": 0,
                     "rotationY": 0,
@@ -529,6 +518,17 @@
                     "x": 17.929787677582965,
                     "y": 0.9618901126003263,
                     "z": -19.55696551187209
+                },
+                {
+                    "rotationX": 0,
+                    "rotationY": 0,
+                    "rotationZ": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "scaleZ": 1,
+                    "x": 8.492231488410903,
+                    "y": 0,
+                    "z": -4.500490524161387
                 }
             ]
         },
@@ -1005,9 +1005,9 @@
                     "scaleX": 1,
                     "scaleY": 1,
                     "scaleZ": 1,
-                    "x": 18.033053358047344,
-                    "y": 9.705255386016631e-06,
-                    "z": -17.413124935428257
+                    "x": 18.003016156426273,
+                    "y": 0.01795022910158428,
+                    "z": -17.42139659811944
                 }
             ]
         },
@@ -1042,207 +1042,50 @@
             "id": "wine-white",
             "instances": [
                 {
-                    "x": 5.6726652515039975,
-                    "y": 0.36430422844916655,
-                    "z": 11.600808532161476,
                     "rotationX": 0,
                     "rotationY": 0,
                     "rotationZ": 0,
                     "scaleX": 0.24556368641499232,
                     "scaleY": 0.24556368641499232,
-                    "scaleZ": 0.24556368641499232
+                    "scaleZ": 0.24556368641499232,
+                    "x": 5.6726652515039975,
+                    "y": 0.36430422844916655,
+                    "z": 11.600808532161476
                 }
             ]
         }
     ],
     "spawners": [
         {
-            "active": true,
-            "cooldown": 7000,
-            "itemIds": [
-                "turkey",
-                "whole-ham",
-                "meat-ribs",
-                "meat-cooked",
-                "meat-sausage"
-            ],
-            "position": {
-                "x": -8,
-                "y": 1,
-                "z": -8
-            },
-            "quantities": [
-                2,
-                1,
-                2,
-                3,
-                2
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
-            "cooldown": 6000,
-            "itemIds": [
-                "loaf-baguette",
-                "loaf-round",
-                "muffin",
-                "pancakes",
-                "waffle"
-            ],
-            "position": {
-                "x": -8,
-                "y": 1,
-                "z": 0
-            },
-            "quantities": [
-                3,
-                2,
-                4,
-                2,
-                2
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
-            "cooldown": 8000,
-            "itemIds": [
-                "pizza",
-                "sandwich",
-                "salad",
-                "sub",
-                "taco"
-            ],
-            "position": {
-                "x": 8,
-                "y": 1,
-                "z": -8
-            },
-            "quantities": [
-                1,
-                2,
-                2,
-                1,
-                2
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
-            "cooldown": 6000,
-            "itemIds": [
-                "sushi-salmon",
-                "maki-roe",
-                "maki-salmon",
-                "mussel",
-                "rice-ball"
-            ],
-            "position": {
-                "x": 8,
-                "y": 1,
-                "z": 0
-            },
-            "quantities": [
-                2,
-                3,
-                3,
-                4,
-                2
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
             "cooldown": 5000,
-            "itemIds": [
-                "watermelon",
-                "strawberry",
-                "pineapple",
-                "orange",
-                "pear"
-            ],
-            "position": {
-                "x": 0,
-                "y": 1,
-                "z": -8
-            },
-            "quantities": [
-                1,
-                4,
-                2,
-                3,
-                3
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
-            "cooldown": 7000,
-            "itemIds": [
-                "ice-cream",
-                "sundae",
-                "pudding",
-                "popsicle"
-            ],
-            "position": {
-                "x": 0,
-                "y": 1,
-                "z": 4
-            },
-            "quantities": [
-                2,
-                1,
-                2,
-                3,
-                2
-            ],
-            "type": "item"
-        },
-        {
-            "active": true,
-            "cooldown": 9000,
-            "itemIds": [
-                "wine-red",
+            "id": "bottles-1",
+            "instanceIndex": 519701,
+            "items": [
                 "wine-white",
-                "soda-bottle",
-                "soda-can",
-                "soda-glass"
+                "wine-red",
+                "can"
             ],
             "position": {
-                "x": -4,
-                "y": 1,
-                "z": 4
-            },
-            "quantities": [
-                1,
-                1,
-                2,
-                3,
-                2
-            ],
-            "type": "item"
+                "x": 6.803164559210627,
+                "y": -0.1998464617134854,
+                "z": 10.263205802565658
+            }
         },
         {
-            "active": true,
-            "cooldown": 5000,
-            "itemIds": [
-                "carrot",
-                "cup-coffee"
-            ],
+            "id": "meat-1",
+            "instanceIndex": 699545,
             "position": {
-                "x": 4,
-                "y": 1,
-                "z": 4
+                "x": 18.051509274043607,
+                "y": 1.1195464098022616,
+                "z": -17.370492963818858
             },
-            "quantities": [
-                3,
-                4,
-                3,
-                2,
-                4
+            "items": [
+                "beef-raw",
+                "bacon-raw",
+                "turkey",
+                "whole-ham"
             ],
-            "type": "item"
+            "cooldown": 5000
         }
     ]
 }

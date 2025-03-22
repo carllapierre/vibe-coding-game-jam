@@ -34,6 +34,24 @@ export class WorldManager {
         try {
             const worldData = await worldManagerService.getWorldData();
             this.worldData = worldData;
+            
+            // After loading world data, log the list of available objects and spawners
+            if (worldData.objects) {
+                console.log('Available objects:', worldData.objects.map(obj => `${obj.id} (${obj.instanceIndex})`));
+                
+                // Log full details of objects for debugging
+                console.log('Detailed objects:');
+                worldData.objects.forEach((obj, index) => {
+                    console.log(`[${index}] ID: ${obj.id}, Instance: ${obj.instanceIndex}, Position:`, obj.position);
+                });
+            }
+            
+            if (worldData.spawners) {
+                console.log('Available spawners:', worldData.spawners.map(s => `${s.id} (${s.instanceIndex})`));
+            } else {
+                console.log('No spawners found in world data');
+            }
+            
             return worldData;
         } catch (error) {
             console.error('Failed to load world:', error);
@@ -81,33 +99,16 @@ export class WorldManager {
     }
 
     update(character, camera) {
-        // Update all spawners
-        this.spawners.forEach((spawner, index) => {
-            if (!spawner) {
-                console.warn(`Invalid spawner at index ${index}`);
-                return;
-            }
-            
-            try {
-                spawner.update();
-                
-                // Check for item collection if character is provided
-                if (character) {
-                    spawner.checkCollection(character);
-                }
-            } catch (error) {
-                console.error(`Error updating spawner ${index}:`, error);
-            }
-        });
-        
-        // Update frustum culling if a camera is provided
-        if (camera && this.frustumCullingEnabled) {
-            this.frameCount++;
-            if (this.frameCount % this.visibilityUpdateFrequency === 0) {
-                this.updateObjectVisibility(camera);
-                this.frameCount = 0;
-            }
+        // Update object visibility using frustum culling
+        if (this.frustumCullingEnabled && this.frameCount % this.visibilityUpdateFrequency === 0) {
+            this.updateObjectVisibility(camera);
         }
+        
+        // Update frame counter
+        this.frameCount = (this.frameCount + 1) % 1000; // Reset to prevent overflow
+        
+        // Update spawners
+        worldManagerService.updateSpawners(character);
     }
     
     updateObjectVisibility(camera) {
@@ -289,10 +290,20 @@ export class WorldManager {
             totalInstances: objectData.instances.length
         });
 
-        // Set the instance to null rather than removing it
-        // This preserves indices for the current session
-        // The cleanup method will remove nulls when saving
+        // Set the instance to null
+        console.log(`Setting instance ${instanceIndex} to null`);
         objectData.instances[instanceIndex] = null;
+        
+        // Immediately filter out null instances
+        console.log('Before filtering null instances:', objectData.instances.length);
+        objectData.instances = objectData.instances.filter(instance => instance !== null);
+        console.log('After filtering null instances:', objectData.instances.length);
+        
+        // If no instances left, remove the entire object
+        if (objectData.instances.length === 0) {
+            console.log(`No instances left, removing entire object ${objectId}`);
+            this.worldData.objects.splice(objectIndex, 1);
+        }
         
         // Remove from collidable objects
         const collidableIndex = this.collidableObjects.findIndex(obj => 
@@ -395,7 +406,6 @@ export class WorldManager {
                 // Apply scale - use saved scale values if they exist, otherwise use registry scale
                 const baseScale = registryItem.scale || 1;
                 if (instance.scaleX !== undefined && instance.scaleY !== undefined && instance.scaleZ !== undefined) {
-                    console.log(`Applying saved scale for ${objectData.id}[${index}]:`, instance.scaleX, instance.scaleY, instance.scaleZ);
                     objectInstance.scale.set(
                         instance.scaleX * this.worldData.settings.scaleFactor * baseScale,
                         instance.scaleY * this.worldData.settings.scaleFactor * baseScale,
@@ -445,17 +455,13 @@ export class WorldManager {
         return this.collidableObjects;
     }
 
-    async initializeSpawners() {
+    async initializeSpawners(character) {
         if (!this.worldData) {
             await this.loadWorld();
         }
         
-        if (this.worldData.spawners) {
-            console.log('Found spawners in world data:', this.worldData.spawners);
-            this.loadSpawners(this.worldData.spawners);
-        } else {
-            console.warn('No spawners found in world data');
-        }
+        // Use the WorldManagerService to handle spawner initialization
+        await worldManagerService.initializeSpawners(this.scene, character);
     }
 
     loadSpawners(spawnerData) {
