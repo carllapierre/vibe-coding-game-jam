@@ -4,6 +4,63 @@ import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTF
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { assetPath } from '../utils/pathHelper.js';
 
+// Health Manager class for handling character health
+class HealthManager {
+    constructor(maxHealth = 1000) {
+        this.maxHealth = maxHealth;
+        this.currentHealth = maxHealth;
+        this.healthChangeCallbacks = [];
+    }
+
+    getHealth() {
+        return this.currentHealth;
+    }
+
+    getMaxHealth() {
+        return this.maxHealth;
+    }
+
+    getHealthPercentage() {
+        return this.currentHealth / this.maxHealth;
+    }
+
+    addHealth(amount) {
+        const prevHealth = this.currentHealth;
+        this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+        if (prevHealth !== this.currentHealth) {
+            this.notifyHealthChange();
+        }
+        return this.currentHealth;
+    }
+
+    removeHealth(amount) {
+        const prevHealth = this.currentHealth;
+        this.currentHealth = Math.max(0, this.currentHealth - amount);
+        if (prevHealth !== this.currentHealth) {
+            this.notifyHealthChange();
+        }
+        return this.currentHealth;
+    }
+
+    setHealth(amount) {
+        const prevHealth = this.currentHealth;
+        this.currentHealth = Math.max(0, Math.min(this.maxHealth, amount));
+        if (prevHealth !== this.currentHealth) {
+            this.notifyHealthChange();
+        }
+        return this.currentHealth;
+    }
+
+    registerHealthChangeCallback(callback) {
+        this.healthChangeCallbacks.push(callback);
+    }
+
+    notifyHealthChange() {
+        this.healthChangeCallbacks.forEach(callback => 
+            callback(this.currentHealth, this.maxHealth));
+    }
+}
+
 export class Character {
     constructor(scene, camera, collidableObjects, _itemRegistry) {
         this.itemRegistry = _itemRegistry;
@@ -11,6 +68,9 @@ export class Character {
         this.camera = camera;
         this.collidableObjects = collidableObjects;
         this.enabled = true;
+        
+        // Initialize health manager
+        this.healthManager = new HealthManager(1000);
         
         // Movement variables
         this.moveSpeed = 0.15;
@@ -155,6 +215,11 @@ export class Character {
             if (this.inventory) {
                 this.inventory.selectSlot(num - 1);
             }
+        }
+        
+        // Test health reduction when Enter is pressed
+        if (event.key === 'Enter') {
+            this.healthManager.removeHealth(50);
         }
     }
 

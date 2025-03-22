@@ -39,6 +39,19 @@ export class ObjectRegistry extends Registry {
         { id: 'soda-can', model: 'soda-can.glb', scale: 1.0, pathOverride: 'objects/' },
         { id: 'soda-glass', model: 'soda-glass.glb', scale: 1.0, pathOverride: 'objects/' },
 
+
+        { id: 'box', model: 'box.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'box-open', model: 'box-open.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'box-large', model: 'box-large.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'box-large-open', model: 'box-large-open.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'chest', model: 'chest.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'barrel', model: 'barrel.glb', scale: 1.0, pathOverride: 'boxes/' },
+        { id: 'barrel-open', model: 'barrel-open.glb', scale: 1.0, pathOverride: 'boxes/' },
+
+
+        { id: 'floor-thick', model: 'floor-thick.glb', scale: 1.0, pathOverride: 'prototype/' },
+        { id: 'stairs-large', model: 'stairs-large.glb', scale: 1.0, pathOverride: 'prototype/' },
+        
     ];
 
     static getModelPath(id) {

@@ -4,6 +4,7 @@ import { Character } from './character/Character.js';
 import { FoodProjectile } from './projectiles/FoodProjectile.js';
 import { Inventory } from './inventory/Inventory.js';
 import { Hotbar } from './ui/Hotbar.js';
+import { HealthBar } from './ui/HealthBar.js';
 import { SpawnableRegistry } from './registries/SpawnableRegistry.js';
 import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
@@ -103,6 +104,10 @@ const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 // Create debug manager
 const worldEditor = new EditorCore(scene, camera, renderer, character);
 worldEditor.setWorldManager(worldManager);
+
+// Initialize health bar and add to character view
+const healthBar = new HealthBar(character);
+characterViewContainer.appendChild(healthBar.container);
 
 // Connect inventory to character
 character.inventory = inventory;
