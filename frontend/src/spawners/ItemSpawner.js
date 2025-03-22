@@ -25,7 +25,6 @@ export class ItemSpawner extends Spawner {
         this.respawnTimeoutId = null;
         this.isSpawning = false;
         
-        console.log(`Created ItemSpawner with cooldown: ${cooldown}ms, items: ${this.itemIds.join(', ')}`);
     }
 
     clearTimeouts() {
@@ -38,17 +37,14 @@ export class ItemSpawner extends Spawner {
     spawn() {
         // Multiple safety checks
         if (!this.active) {
-            console.log('Spawner is not active, skipping spawn');
             return;
         }
         
         if (this.isSpawning) {
-            console.log('Already spawning, skipping spawn request');
             return;
         }
         
         if (this.currentSpawnable) {
-            console.log('Spawnable already exists, skipping spawn');
             return;
         }
 
@@ -59,12 +55,10 @@ export class ItemSpawner extends Spawner {
         
         if (this.isRespawning && timeSinceLastSpawn < this.cooldown) {
             const remainingTime = this.cooldown - timeSinceLastSpawn;
-            console.log(`Still respawning, ${remainingTime}ms remaining`);
             return;
         }
 
         this.isSpawning = true;
-        console.log('Starting spawn process...');
 
         try {
             const randomIndex = Math.floor(Math.random() * this.itemIds.length);
@@ -89,7 +83,6 @@ export class ItemSpawner extends Spawner {
                     spawnerConfig.defaultQuantityMin;
             }
             
-            console.log(`Spawning item: ${selectedItemId} with quantity: ${selectedQuantity}`);
 
             this.currentSpawnable = new Spawnable(this.position, selectedItemId);
             this.currentSpawnable.quantity = selectedQuantity;
@@ -100,7 +93,6 @@ export class ItemSpawner extends Spawner {
             
             this.lastSpawnTime = currentTime;
             this.isRespawning = false;
-            console.log('Spawn successful');
         } catch (error) {
             console.error("Error spawning item:", error);
             this.isSpawning = false;
@@ -122,7 +114,6 @@ export class ItemSpawner extends Spawner {
 
     setActive(active) {
         this.active = active;
-        console.log(`Spawner active state set to: ${active}`);
         
         // If being set to active and we don't have a spawnable, try to spawn
         if (active && !this.currentSpawnable && !this.isRespawning) {
@@ -161,7 +152,6 @@ export class ItemSpawner extends Spawner {
             return;
         }
 
-        console.log('Item collected, starting respawn timer');
         
         try {
             this.isRespawning = true;
@@ -184,7 +174,6 @@ export class ItemSpawner extends Spawner {
             
             // Set up a single respawn after the cooldown
             this.respawnTimeoutId = setTimeout(() => {
-                console.log('Respawn cooldown complete');
                 this.isRespawning = false;
                 if (!this.currentSpawnable) {
                     this.spawn();
@@ -236,7 +225,6 @@ export class ItemSpawner extends Spawner {
         
         // If within collection range (2 units)
         if (distance <= 2) {
-            console.log('Item in collection range, collecting...');
             this.collect(character);
         }
     }

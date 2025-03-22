@@ -63,21 +63,8 @@ class WorldManagerService {
                 objects: worldData.objects || [],
                 spawners: worldData.spawners || []
             }));
-
-            // Detailed logging of what we're saving
-            console.log('Saving world data - objects count:', dataToSave.objects.length);
-            
-            // Log each object and its instances
-            dataToSave.objects.forEach(obj => {
-                console.log(`Object ${obj.id}: ${obj.instances ? obj.instances.length : 0} instances`);
-            });
-
-            // Log request details
-            console.log(`Sending POST request to: ${this.apiHost}/api/world`);
-            
             // Convert to a string once to avoid JSON.stringify being called multiple times
             const jsonData = JSON.stringify(dataToSave, null, 4);
-            console.log(`Data size: ${jsonData.length} characters`);
             
             const response = await fetch(`${this.apiHost}/api/world`, {
                 method: 'POST',
@@ -98,8 +85,7 @@ class WorldManagerService {
             }
 
             const result = await response.json();
-            console.log('Save response from server:', result);
-            console.log('World data saved successfully to backend');
+
             return true;
         } catch (error) {
             console.error('Error saving world data:', {
@@ -118,11 +104,9 @@ class WorldManagerService {
         // Get current world data
         return this.getWorldData().then(worldData => {
             if (!worldData.spawners || !worldData.spawners.length) {
-                console.log('No spawners found in world data');
                 return;
             }
             
-            console.log(`Found ${worldData.spawners.length} spawners in world data`);
             
             // For each spawner in the world data
             worldData.spawners.forEach(spawnerData => {
@@ -176,9 +160,6 @@ class WorldManagerService {
                         };
                     });
                     
-                    console.log(`Using registry config for spawner ${spawnerId}: cooldown=${cooldown}, items=${itemIds.join(',')}`);
-                    console.log(`Quantity ranges:`, quantities.map((q, i) => `${itemIds[i]}: ${q.min}-${q.max}`));
-                    
                     // Create a new ItemSpawner with registry data including quantities
                     const spawner = new ItemSpawner(
                         position,
@@ -197,13 +178,11 @@ class WorldManagerService {
                     // Store in loadedSpawners
                     this.loadedSpawners.push(spawner);
                     
-                    console.log(`Initialized spawner: ${spawnerData.id} at position:`, position);
                 } catch (error) {
                     console.error(`Error initializing spawner ${spawnerData.id}:`, error);
                 }
             });
             
-            console.log(`Successfully initialized ${this.loadedSpawners.length} spawners`);
         }).catch(error => {
             console.error('Error loading spawners:', error);
         });
@@ -212,7 +191,6 @@ class WorldManagerService {
     // Clean up spawners when needed
     cleanupSpawners() {
         if (this.loadedSpawners && this.loadedSpawners.length > 0) {
-            console.log(`Cleaning up ${this.loadedSpawners.length} spawners`);
             this.loadedSpawners.forEach(spawner => {
                 // Call cleanup on the spawner if it has one
                 if (spawner.clearTimeouts) {
@@ -247,13 +225,11 @@ class WorldManagerService {
             // Get current world data
             const worldData = await this.getWorldData();
             
-            console.log('BEFORE DELETE - Full world data structure:', JSON.stringify(worldData, null, 2));
             
             // Find the object in the objects array
             if (worldData.objects && Array.isArray(worldData.objects)) {
                 // Convert instanceIndex to number to ensure proper comparison
                 const instanceNumber = parseInt(instanceIndex, 10);
-                console.log(`Looking for object ${objectId} instance ${instanceNumber}`);
                 
                 // Find the object with matching ID
                 const objectIndex = worldData.objects.findIndex(obj => obj.id === objectId);
@@ -270,9 +246,6 @@ class WorldManagerService {
                     return false;
                 }
                 
-                console.log(`Found object ${objectId} with ${objectData.instances.length} instances:`, 
-                    objectData.instances.map((inst, i) => inst ? `[${i}]: ${JSON.stringify(inst).substring(0, 30)}...` : `[${i}]: null`));
-                
                 // Find the specific instance
                 const instanceExists = instanceNumber < objectData.instances.length && 
                                       objectData.instances[instanceNumber] !== null;
@@ -282,8 +255,6 @@ class WorldManagerService {
                     return false;
                 }
                 
-                console.log(`Removing instance at index ${instanceNumber}`);
-                
                 // Remove the instance by filtering the array 
                 const originalLength = objectData.instances.length;
                 
@@ -291,20 +262,15 @@ class WorldManagerService {
                 const newInstances = objectData.instances.filter((_, index) => index !== instanceNumber);
                 objectData.instances = newInstances;
                 
-                console.log(`After filtering: ${originalLength} -> ${objectData.instances.length} instances`);
                 
                 // If no instances are left, remove the entire object
                 if (objectData.instances.length === 0) {
-                    console.log(`No instances left, removing entire object ${objectId}`);
                     worldData.objects.splice(objectIndex, 1);
                 }
                 
-                console.log('AFTER DELETE - Modified world data structure:', JSON.stringify(worldData, null, 2));
                 
                 // Save the updated world data
-                console.log('Saving modified world data to server...');
                 const saveResult = await this.saveWorldData(worldData);
-                console.log('Save result:', saveResult);
                 return true;
             } else {
                 console.warn('No objects array in world data');

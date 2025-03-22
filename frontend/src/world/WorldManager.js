@@ -38,23 +38,6 @@ export class WorldManager {
             const worldData = await worldManagerService.getWorldData();
             this.worldData = worldData;
             
-            // After loading world data, log the list of available objects and spawners
-            if (worldData.objects) {
-                console.log('Available objects:', worldData.objects.map(obj => `${obj.id} (${obj.instanceIndex})`));
-                
-                // Log full details of objects for debugging
-                console.log('Detailed objects:');
-                worldData.objects.forEach((obj, index) => {
-                    console.log(`[${index}] ID: ${obj.id}, Instance: ${obj.instanceIndex}, Position:`, obj.position);
-                });
-            }
-            
-            if (worldData.spawners) {
-                console.log('Available spawners:', worldData.spawners.map(s => `${s.id} (${s.instanceIndex})`));
-            } else {
-                console.log('No spawners found in world data');
-            }
-            
             return worldData;
         } catch (error) {
             console.error('Failed to load world:', error);
@@ -68,9 +51,7 @@ export class WorldManager {
             this.cleanupNullInstances();
             
             const success = await worldManagerService.saveWorldData(this.worldData);
-            if (success) {
-                console.log('World data saved successfully');
-            }
+
             return success;
         } catch (error) {
             console.error('Failed to save world:', error);
@@ -208,7 +189,6 @@ export class WorldManager {
         
         // If the object doesn't exist in worldData yet, create it
         if (!objectData) {
-            console.log(`Creating new object entry for ${objectId} in worldData`);
             objectData = {
                 id: objectId,
                 instances: []
@@ -218,7 +198,6 @@ export class WorldManager {
         
         // If the instance doesn't exist yet, create an empty placeholder
         if (!objectData.instances[instanceIndex]) {
-            console.log(`Creating new instance for ${objectId}[${instanceIndex}]`);
             
             // Ensure instances array is large enough (fill any gaps)
             while (objectData.instances.length <= instanceIndex) {
@@ -243,16 +222,9 @@ export class WorldManager {
             scaleZ: scale ? scale.z / scaleFactor : 1
         };
 
-        console.log(`Saving normalized scale for ${objectId}[${instanceIndex}]:`, {
-            x: objectData.instances[instanceIndex].scaleX,
-            y: objectData.instances[instanceIndex].scaleY,
-            z: objectData.instances[instanceIndex].scaleZ
-        });
-
         // Save the changes to the server
         try {
             await this.saveWorldData();
-            console.log(`Updated and saved object instance: ${objectId} [${instanceIndex}]`);
             return true;
         } catch (error) {
             console.error('Failed to save object instance update:', error);
@@ -266,8 +238,6 @@ export class WorldManager {
             return false;
         }
 
-        console.log('Attempting to delete object:', { objectId, instanceIndex });
-
         // Validate instanceIndex is a valid number
         if (isNaN(instanceIndex) || instanceIndex === undefined) {
             console.error('Invalid instance index:', instanceIndex);
@@ -277,7 +247,6 @@ export class WorldManager {
         const objectIndex = this.worldData.objects.findIndex(obj => obj.id === objectId);
         if (objectIndex === -1) {
             console.error('Object not found in world data:', objectId);
-            console.log('Available objects:', this.worldData.objects.map(obj => obj.id));
             return false;
         }
 
@@ -287,24 +256,14 @@ export class WorldManager {
             return false;
         }
 
-        console.log('Found object to delete:', {
-            objectId,
-            instanceIndex,
-            totalInstances: objectData.instances.length
-        });
-
         // Set the instance to null
-        console.log(`Setting instance ${instanceIndex} to null`);
         objectData.instances[instanceIndex] = null;
         
         // Immediately filter out null instances
-        console.log('Before filtering null instances:', objectData.instances.length);
         objectData.instances = objectData.instances.filter(instance => instance !== null);
-        console.log('After filtering null instances:', objectData.instances.length);
         
         // If no instances left, remove the entire object
         if (objectData.instances.length === 0) {
-            console.log(`No instances left, removing entire object ${objectId}`);
             this.worldData.objects.splice(objectIndex, 1);
         }
         
@@ -314,7 +273,6 @@ export class WorldManager {
         );
         
         if (collidableIndex !== -1) {
-            console.log('Removing from collidable objects:', collidableIndex);
             this.collidableObjects.splice(collidableIndex, 1);
         } else {
             console.warn('Object not found in collidable objects:', { objectId, instanceIndex });
@@ -322,9 +280,7 @@ export class WorldManager {
 
         // Save the changes to the server
         try {
-            console.log('Saving world data after deletion...');
             await this.saveWorldData();
-            console.log(`Successfully deleted object instance: ${objectId} [${instanceIndex}]`);
             return true;
         } catch (error) {
             console.error('Failed to delete object instance:', {
@@ -415,7 +371,6 @@ export class WorldManager {
                         instance.scaleZ * this.worldData.settings.scaleFactor * baseScale
                     );
                 } else {
-                    console.log(`No saved scale for ${objectData.id}[${index}], using default`);
                     objectInstance.scale.multiplyScalar(this.worldData.settings.scaleFactor * baseScale);
                 }
 
@@ -473,7 +428,6 @@ export class WorldManager {
             return;
         }
         
-        console.log("Loading spawners:", spawnerData);
 
         spawnerData.forEach((spawnerConfig, index) => {
             if (!spawnerConfig || !spawnerConfig.position) {
@@ -529,16 +483,12 @@ export class WorldManager {
                 };
             });
 
-            console.log(`Using registry config for spawner ${spawnerId}: cooldown=${cooldown}, items=${itemIds.join(',')}`);
-            console.log(`Quantity ranges:`, quantities.map((q, i) => `${itemIds[i]}: ${q.min}-${q.max}`));
 
             try {
                 // Create spawner with position, itemIds, cooldown, and quantities
                 const spawner = new ItemSpawner(position, itemIds, cooldown, quantities);
-                console.log(`Created spawner at position:`, position);
                 spawner.addToScene(this.scene); // Add to scene after creation
                 this.spawners.push(spawner);
-                console.log(`Added spawner to world, total spawners:`, this.spawners.length);
             } catch (error) {
                 console.error(`Error creating spawner at index ${index}:`, error);
             }

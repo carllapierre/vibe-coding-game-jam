@@ -4,7 +4,6 @@ export const addInventory = (player, collectionData) => {
         const added = player.inventory.addItem(collectionData.itemId, collectionData.quantity);
         
         if (added) {
-            console.log(`Added ${collectionData.quantity} of ${collectionData.itemId} to inventory`);
             
             // If the currently selected slot has this item, make sure the preview is updated
             const selectedSlot = player.inventory.getSelectedSlot();
@@ -12,10 +11,7 @@ export const addInventory = (player, collectionData) => {
                 player.currentItem = collectionData.itemId;
                 player.updatePreviewModel();
             }
-        } else {
-            console.log(`Couldn't add ${collectionData.itemId} to inventory - it might be full`);
         }
-        
         return added;
     }
     

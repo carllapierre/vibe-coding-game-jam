@@ -53,7 +53,6 @@ export class Spawnable {
         
         // Determine which path to use for the model
         const modelPath = this.itemConfig ? this.itemConfig.modelPath : this.config.modelPath;
-        console.log('Loading model from:', modelPath);
         
         loader.load(
             modelPath,
@@ -67,12 +66,10 @@ export class Spawnable {
                 
                 // If we already have a scene, add the model immediately
                 if (this.scene) {
-                    console.log('Adding model to existing scene');
                     this.scene.add(this.model);
                 }
             },
             (progress) => {
-                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
             },
             (error) => {
                 console.error('Error loading food model:', error);
@@ -179,10 +176,8 @@ export class Spawnable {
     }
 
     addToScene(scene) {
-        console.log('Adding spawnable to scene');
         this.scene = scene;
         if (this.model) {
-            console.log('Adding existing model to scene');
             scene.add(this.model);
         }
         scene.add(this.glowLight);
@@ -268,7 +263,6 @@ export class Spawnable {
                 itemId: this.itemConfig.id
             };
 
-            console.log('Collecting item:', this.itemConfig);
             this.itemConfig.onCollect(player, collectionData);
         }
         

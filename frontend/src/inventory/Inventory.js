@@ -101,8 +101,6 @@ export class Inventory {
     addItem(itemId, quantity) {
         if (!itemId || quantity <= 0) return false;
         
-        console.log(`Adding ${quantity} of ${itemId} to inventory`);
-        
         // First try to add to existing stacks
         let remainingQuantity = quantity;
         let itemAdded = false;
@@ -125,8 +123,6 @@ export class Inventory {
                 if (this.onAmountChange) {
                     this.onAmountChange(i, slot.amount);
                 }
-                
-                console.log(`Added ${amountToAdd} to existing stack in slot ${i}, stack now ${slot.amount}`);
             }
         }
         
@@ -155,7 +151,6 @@ export class Inventory {
                         this.onAmountChange(i, slot.amount);
                     }
                     
-                    console.log(`Added ${amountToAdd} to new stack in slot ${i}`);
                 }
             }
         }

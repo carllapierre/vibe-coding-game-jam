@@ -7,7 +7,7 @@ import { Hotbar } from './ui/Hotbar.js';
 import { SpawnableRegistry } from './registries/SpawnableRegistry.js';
 import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
-import { WorldEditor } from './world/WorldEditor.js';
+import { EditorCore } from './world/editor/EditorCore.js';
 import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
@@ -101,7 +101,7 @@ let collidableObjects = [];
 const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
 // Create debug manager
-const worldEditor = new WorldEditor(scene, camera, renderer, character);
+const worldEditor = new EditorCore(scene, camera, renderer, character);
 worldEditor.setWorldManager(worldManager);
 
 // Connect inventory to character

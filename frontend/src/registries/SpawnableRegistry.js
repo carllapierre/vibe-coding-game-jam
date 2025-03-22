@@ -4,7 +4,6 @@ export class SpawnableRegistry {
     
     // Initialize the spawnable types from food registry
     static initialize(spawnables = []) {
-        console.log("Initializing SpawnableRegistry...");
         // Clear existing types
         this.spawnableTypes = [];
 
@@ -34,7 +33,6 @@ export class SpawnableRegistry {
             this.registerSpawnableType({...this.defaultSpawnableType, ...spawnable});
         });
         
-        console.log(`SpawnableRegistry initialized with ${this.spawnableTypes.length} types`);
     }
 
     static updateSpawnableProperties(spawnableIds = [], properties) {
