@@ -4,11 +4,9 @@ import { TransformControls } from './../../node_modules/three/examples/jsm/contr
 import { ObjectRegistry } from '../registries/ObjectRegistry.js';
 import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
 import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
-import { assetPath } from '../utils/pathHelper.js';
-import { ItemSpawner } from '../spawners/ItemSpawner.js';
 import worldManagerService from '../services/WorldManagerService.js';
 
-export class DebugManager {
+export class WorldEditor {
     constructor(scene, camera, renderer, character) {
         this.scene = scene;
         this.camera = camera;

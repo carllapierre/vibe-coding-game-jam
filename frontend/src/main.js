@@ -7,7 +7,7 @@ import { Hotbar } from './ui/Hotbar.js';
 import { SpawnableRegistry } from './registries/SpawnableRegistry.js';
 import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
-import { DebugManager } from './debug/DebugManager.js';
+import { WorldEditor } from './world/WorldEditor.js';
 import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
@@ -101,8 +101,8 @@ let collidableObjects = [];
 const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
 // Create debug manager
-const debugManager = new DebugManager(scene, camera, renderer, character);
-debugManager.setWorldManager(worldManager);
+const worldEditor = new WorldEditor(scene, camera, renderer, character);
+worldEditor.setWorldManager(worldManager);
 
 // Connect inventory to character
 character.inventory = inventory;
@@ -144,10 +144,10 @@ window.addEventListener('resize', () => {
 function animate() {
     requestAnimationFrame(animate);
 
-    if (debugManager.isDebugMode) {
+    if (worldEditor.isDebugMode) {
         // Editor view - hide character view
         characterViewContainer.style.display = 'none';
-        debugManager.update();
+        worldEditor.update();
     } else {
         // Character view - show character view
         characterViewContainer.style.display = 'block';
