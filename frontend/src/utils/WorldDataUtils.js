@@ -256,14 +256,34 @@ export function removeObjectInstanceFromWorldData(worldData, objectId, instanceI
 export function removeSpawnerFromWorldData(worldData, spawnerId, instanceIndex) {
     if (!worldData || !worldData.spawners) return false;
     
+    console.log("removeSpawnerFromWorldData called with:", {
+        spawnerId,
+        instanceIndex,
+        spawners_count: worldData.spawners.length
+    });
+    
+    // Log all spawners for debugging
+    console.log("Available spawners:", worldData.spawners.map(s => ({
+        id: s.id,
+        instanceIndex: s.instanceIndex,
+        index: s.index
+    })));
+    
+    // Check for spawner with either instanceIndex or index
     const spawnerIndex = worldData.spawners.findIndex(
-        spawner => spawner.id === spawnerId && spawner.index === instanceIndex
+        spawner => spawner.id === spawnerId && (spawner.instanceIndex === instanceIndex || spawner.index === instanceIndex)
     );
     
-    if (spawnerIndex === -1) return false;
+    console.log(`Spawner search result index: ${spawnerIndex}`);
+    
+    if (spawnerIndex === -1) {
+        console.warn(`Could not find spawner with id=${spawnerId} and instanceIndex/index=${instanceIndex}`);
+        return false;
+    }
     
     // Remove spawner from array
-    worldData.spawners.splice(spawnerIndex, 1);
+    const removedSpawner = worldData.spawners.splice(spawnerIndex, 1)[0];
+    console.log("Removed spawner:", removedSpawner);
     
     return true;
 }

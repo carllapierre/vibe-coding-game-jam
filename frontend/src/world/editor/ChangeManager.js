@@ -181,9 +181,17 @@ export class ChangeManager {
                 }
             }
             
-            // Skip saving world data again if we've just processed deletions
-            // The deleteObjectFromWorldData method already saved the changes
-            if (deleteChanges.length > 0 && transformChanges.length === 0) {
+            // Only explicitly save after spawner deletions, since object deletions
+            // are handled by deleteObjectFromWorldData which saves internally
+            const hasSpawnerDeletions = deleteChanges.some(change => change.userData && change.userData.type === 'spawner');
+            
+            if (hasSpawnerDeletions) {
+                // Save changes to disk for spawner deletions
+                await worldManagerService.saveWorldData(worldData);
+            }
+            
+            // If there are no transform changes, we can return now
+            if (transformChanges.length === 0) {
                 // Clear changes after saving
                 this.pendingChanges.clear();
                 this.deletedObjects.clear();
@@ -262,47 +270,83 @@ export class ChangeManager {
      */
     async handleSpawnerDeletion(worldData, change, worldManager) {
         try {
+            console.log("handleSpawnerDeletion called with:", {
+                change_id: change.id,
+                change_userData: change.userData,
+                worldData_spawners_count: worldData.spawners?.length || 0
+            });
+            
             // Find and remove the spawner from worldData
             const spawnerIndex = worldData.spawners.findIndex(
-                s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                s => s.id === change.id && (s.instanceIndex === change.userData.instanceIndex || s.index === change.userData.instanceIndex)
             );
+            
+            console.log("Spawner search results:", {
+                spawnerIndex,
+                worldData_spawners: JSON.stringify(worldData.spawners.map(s => ({ id: s.id, instanceIndex: s.instanceIndex || s.index })))
+            });
             
             if (spawnerIndex !== -1) {
                 worldData.spawners.splice(spawnerIndex, 1);
+                console.log(`Removed spawner at index ${spawnerIndex} from worldData`);
                 
                 // Clean up the actual spawner if it exists
                 if (worldManagerService.loadedSpawners) {
-                    const spawnerKey = `${change.id}-${change.userData.instanceIndex}`;
-                    if (worldManagerService.loadedSpawners[spawnerKey]) {
-                        
-                        // Get the spawner that needs to be removed
-                        const spawner = worldManagerService.loadedSpawners[spawnerKey];
+                    console.log("loadedSpawners structure:", {
+                        type: typeof worldManagerService.loadedSpawners,
+                        isArray: Array.isArray(worldManagerService.loadedSpawners),
+                        length: Array.isArray(worldManagerService.loadedSpawners) ? worldManagerService.loadedSpawners.length : Object.keys(worldManagerService.loadedSpawners).length
+                    });
+                    
+                    // loadedSpawners is an array, not an object with keys
+                    const spawnerArrayIndex = worldManagerService.loadedSpawners.findIndex(
+                        s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                    );
+                    console.log(`Spawner array index: ${spawnerArrayIndex}`);
+                    
+                    if (spawnerArrayIndex !== -1) {
+                        const spawner = worldManagerService.loadedSpawners[spawnerArrayIndex];
+                        console.log(`Found spawner to remove at index ${spawnerArrayIndex}`, {
+                            id: spawner.id,
+                            instanceIndex: spawner.instanceIndex
+                        });
                         
                         // If spawner has a cleanup method, call it
                         if (spawner.clearTimeouts) {
                             spawner.clearTimeouts();
+                            console.log("Cleared spawner timeouts");
                         }
                         
                         // If spawner has a current spawnable, clean it up
                         if (spawner.currentSpawnable) {
                             spawner.currentSpawnable.cleanup();
+                            console.log("Cleaned up spawner's currentSpawnable");
                         }
                         
-                        // Remove from loadedSpawners
-                        delete worldManagerService.loadedSpawners[spawnerKey];
+                        // Remove from loadedSpawners array
+                        worldManagerService.loadedSpawners.splice(spawnerArrayIndex, 1);
+                        console.log(`Removed spawner from loadedSpawners array`);
                         
                         // Remove the visual from the scene (important!)
                         const visualName = `spawner-visual-${change.id}-${change.userData.instanceIndex}`;
                         const visual = this.scene.getObjectByName(visualName);
                         if (visual) {
                             this.scene.remove(visual);
+                            console.log(`Removed spawner visual ${visualName} from scene`);
+                        } else {
+                            console.warn(`Could not find spawner visual ${visualName} in scene`);
                         }
                         
                         // Remove any actual spawner models from the scene
                         if (spawner.model) {
                             this.scene.remove(spawner.model);
+                            console.log("Removed spawner model from scene");
                         }
+                    } else {
+                        console.warn(`Could not find spawner ${change.id}-${change.userData.instanceIndex} in loadedSpawners array`);
                     }
+                } else {
+                    console.warn("worldManagerService.loadedSpawners is not available");
                 }
                 
                 // Also remove the object that was marked for deletion
@@ -314,15 +358,19 @@ export class ChangeManager {
                 
                 if (objectToDelete) {
                     this.scene.remove(objectToDelete);
+                    console.log(`Removed object with userData from scene`);
+                } else {
+                    console.warn(`Could not find object with userData in scene`);
                 }
                 
+                console.log("Spawner deletion completed successfully");
                 return true;
             } else {
                 console.warn(`Could not find spawner ${change.id} (${change.userData.instanceIndex}) in world data`);
                 return false;
             }
         } catch (error) {
-            console.error(`Error deleting spawner: ${error.message}`);
+            console.error(`Error deleting spawner: ${error.message}`, error);
             return false;
         }
     }
@@ -333,11 +381,17 @@ export class ChangeManager {
      */
     async handleObjectDeletion(worldData, change) {
         try {
+            console.log("handleObjectDeletion called with:", {
+                change_id: change.id,
+                change_userData: change.userData,
+            });
+            
             // First delete from world data via the service
             const result = await worldManagerService.deleteObjectFromWorldData(change.id, change.userData.instanceIndex);
             
+            console.log(`Delete from worldData result: ${result ? 'success' : 'failed'}`);
+            
             if (result) {
-                
                 // Then remove from scene if successful
                 const objectToDelete = findObjectWithUserData(this.scene, {
                     id: change.id,
@@ -346,6 +400,7 @@ export class ChangeManager {
                 
                 if (objectToDelete) {
                     this.scene.remove(objectToDelete);
+                    console.log(`Removed object ${change.id} (${change.userData.instanceIndex}) from scene`);
                     return true;
                 } else {
                     console.warn(`Object to delete not found in scene: ${change.id}:${change.userData.instanceIndex}`);
@@ -368,10 +423,18 @@ export class ChangeManager {
      */
     async handleSpawnerTransform(worldData, change) {
         try {
-            // Find if this spawner already exists
+            console.log("handleSpawnerTransform called with:", {
+                change_id: change.id,
+                change_userData: change.userData,
+                position: change.position
+            });
+            
+            // Find if this spawner already exists - check both instanceIndex and index
             const existingIndex = worldData.spawners.findIndex(
-                s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                s => s.id === change.id && (s.instanceIndex === change.userData.instanceIndex || s.index === change.userData.instanceIndex)
             );
+            
+            console.log(`Spawner search for updates, index: ${existingIndex}`);
             
             // Create spawner data object - only save ID, instance index and position
             const spawnerData = {
@@ -387,16 +450,23 @@ export class ChangeManager {
             // Update or add to world data
             if (existingIndex >= 0) {
                 worldData.spawners[existingIndex] = spawnerData;
+                console.log(`Updated spawner at index ${existingIndex} in worldData`);
             } else {
                 worldData.spawners.push(spawnerData);
+                console.log(`Added new spawner to worldData`);
             }
             
             // Update the actual spawner if it exists
             if (worldManagerService.loadedSpawners) {
-                const spawnerKey = `${change.id}-${change.userData.instanceIndex}`;
-                const spawner = worldManagerService.loadedSpawners[spawnerKey];
-                if (spawner) {
+                // Find spawner in array by id and instanceIndex
+                const spawnerArrayIndex = worldManagerService.loadedSpawners.findIndex(
+                    s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
+                );
+                
+                if (spawnerArrayIndex !== -1) {
+                    const spawner = worldManagerService.loadedSpawners[spawnerArrayIndex];
                     spawner.position.copy(change.position);
+                    console.log(`Updated spawner position in loadedSpawners array`);
                 }
             }
             

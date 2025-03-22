@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from './../../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
 import { ObjectRegistry } from '../../registries/ObjectRegistry.js';
 import { SpawnerRegistry } from '../../registries/SpawnerRegistry.js';
 import { getPositionInFrontOfCamera } from '../../utils/SceneUtils.js';
@@ -518,97 +519,113 @@ export class ObjectCatalog {
         const canvas = document.createElement('canvas');
         canvas.width = 200;
         canvas.height = 120;
-        const renderer = new THREE.WebGLRenderer({ 
-            canvas,
-            alpha: true, 
-            antialias: true 
-        });
-        renderer.setClearColor(0x000000, 0);
-        renderer.setSize(200, 120);
         
-        // Common lights for all previews
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(5, 10, 7);
+        try {
+            const renderer = new THREE.WebGLRenderer({ 
+                canvas,
+                alpha: true, 
+                antialias: true 
+            });
+            renderer.setClearColor(0x000000, 0);
+            renderer.setSize(200, 120);
             
-        // Load model previews one by one
-        for (const item of ObjectRegistry.items) {
-            try {
-                // Get preview container
-                const previewContainer = this.itemsContainer.querySelector(`[data-preview-for="${item.id}"]`);
-                if (!previewContainer) continue;
+            // Common lights for all previews
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7);
                 
-                // Use assetPath helper to get the correct path
-                const modelPath = ObjectRegistry.getModelPath(item.id);
-                
-                // Create a new scene for this preview
-                const scene = new THREE.Scene();
-                scene.add(ambientLight.clone());
-                scene.add(directionalLight.clone());
-                
-                // Create a camera for this preview
-                const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
-                
-                // Load the model
-                await new Promise(resolve => {
-                    const loader = new THREE.GLTFLoader();
-                    loader.load(modelPath, (gltf) => {
+            // Load model previews one by one
+            for (const item of ObjectRegistry.items) {
+                try {
+                    // Get preview container
+                    const previewContainer = this.itemsContainer.querySelector(`[data-preview-for="${item.id}"]`);
+                    if (!previewContainer) continue;
+                    
+                    // Use assetPath helper to get the correct path
+                    const modelPath = ObjectRegistry.getModelPath(item.id);
+                    
+                    // Create a new scene for this preview
+                    const scene = new THREE.Scene();
+                    scene.add(ambientLight.clone());
+                    scene.add(directionalLight.clone());
+                    
+                    // Create a camera for this preview
+                    const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
+                    
+                    // Load the model
+                    await new Promise(resolve => {
                         try {
-                            const model = gltf.scene.clone();
-                            
-                            // Apply scale
-                            model.scale.multiplyScalar(item.scale || 1.0);
-                            
-                            // Add to scene
-                            scene.add(model);
-                            
-                            // Calculate bounding box to center the model
-                            const bbox = new THREE.Box3().setFromObject(model);
-                            const center = bbox.getCenter(new THREE.Vector3());
-                            const size = bbox.getSize(new THREE.Vector3());
-                            const maxDim = Math.max(size.x, size.y, size.z);
-                            
-                            // Position camera based on bounding box
-                            camera.position.set(
-                                center.x + maxDim * 1.5, 
-                                center.y + maxDim * 0.8, 
-                                center.z + maxDim * 1.5
-                            );
-                            camera.lookAt(center);
-                            
-                            // Render and create image
-                            renderer.render(scene, camera);
-                            
-                            // Create a new image from canvas
-                            const img = document.createElement('img');
-                            img.src = canvas.toDataURL('image/png');
-                            img.style.cssText = `
-                                width: 100%;
-                                height: 100%;
-                                object-fit: contain;
-                            `;
-                            
-                            // Clear container and add image
-                            previewContainer.innerHTML = '';
-                            previewContainer.appendChild(img);
-                            
-                            resolve();
+                            const loader = new GLTFLoader();
+                            loader.load(modelPath, (gltf) => {
+                                try {
+                                    const model = gltf.scene.clone();
+                                    
+                                    // Apply scale
+                                    model.scale.multiplyScalar(item.scale || 1.0);
+                                    
+                                    // Add to scene
+                                    scene.add(model);
+                                    
+                                    // Calculate bounding box to center the model
+                                    const bbox = new THREE.Box3().setFromObject(model);
+                                    const center = bbox.getCenter(new THREE.Vector3());
+                                    const size = bbox.getSize(new THREE.Vector3());
+                                    const maxDim = Math.max(size.x, size.y, size.z);
+                                    
+                                    // Position camera based on bounding box
+                                    camera.position.set(
+                                        center.x + maxDim * 1.5, 
+                                        center.y + maxDim * 0.8, 
+                                        center.z + maxDim * 1.5
+                                    );
+                                    camera.lookAt(center);
+                                    
+                                    // Render and create image
+                                    renderer.render(scene, camera);
+                                    
+                                    // Create a new image from canvas
+                                    const img = document.createElement('img');
+                                    img.src = canvas.toDataURL('image/png');
+                                    img.style.cssText = `
+                                        width: 100%;
+                                        height: 100%;
+                                        object-fit: contain;
+                                    `;
+                                    
+                                    // Clear container and add image
+                                    previewContainer.innerHTML = '';
+                                    previewContainer.appendChild(img);
+                                    
+                                    resolve();
+                                } catch (error) {
+                                    console.error(`Error processing model for ${item.id}:`, error);
+                                    // Set a default placeholder
+                                    previewContainer.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:32px;">📦</div>`;
+                                    resolve();
+                                }
+                            }, 
+                            // Progress callback
+                            undefined, 
+                            // Error callback
+                            (error) => {
+                                console.error(`Error loading preview for ${item.id}:`, error);
+                                // Set a default placeholder
+                                previewContainer.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:32px;">📦</div>`;
+                                resolve();
+                            });
                         } catch (error) {
-                            console.error(`Error processing model for ${item.id}:`, error);
+                            console.error(`Loader error for ${item.id}:`, error);
+                            // Set a default placeholder
+                            previewContainer.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:32px;">📦</div>`;
                             resolve();
                         }
-                    }, 
-                    // Progress callback
-                    undefined, 
-                    // Error callback
-                    (error) => {
-                        console.error(`Error loading preview for ${item.id}:`, error);
-                        resolve();
                     });
-                });
-            } catch (error) {
-                console.error(`Error setting up preview for ${item.id}:`, error);
+                } catch (error) {
+                    console.error(`Error setting up preview for ${item.id}:`, error);
+                }
             }
+        } catch (error) {
+            console.error('Error initializing preview renderer:', error);
         }
     }
     
