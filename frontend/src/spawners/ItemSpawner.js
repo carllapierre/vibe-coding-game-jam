@@ -1,14 +1,21 @@
 import { Spawner } from './Spawner.js';
 import { Vector3 } from 'three';
 import { Spawnable } from './Spawnable.js';
+import { spawner as spawnerConfig } from '../config.js';
 
 export class ItemSpawner extends Spawner {
-    constructor(position, itemIds, cooldown = 5000, quantities = null) {
+    constructor(position, itemIds, cooldown = spawnerConfig.defaultCooldown, quantities = null) {
         super(position, new Vector3(0, 0, 0));
         
         // Support both single itemId (string) and array of itemIds
         this.itemIds = Array.isArray(itemIds) ? itemIds : [itemIds];
-        this.quantities = quantities || this.itemIds.map(() => 1);
+        
+        // Quantities can now be objects with min/max or simple numbers
+        this.quantities = quantities || this.itemIds.map(() => ({
+            min: spawnerConfig.defaultQuantityMin,
+            max: spawnerConfig.defaultQuantityMax
+        }));
+        
         this.cooldown = cooldown;
         this.lastSpawnTime = Date.now(); // Initialize to current time
         this.currentSpawnable = null;
@@ -62,7 +69,25 @@ export class ItemSpawner extends Spawner {
         try {
             const randomIndex = Math.floor(Math.random() * this.itemIds.length);
             const selectedItemId = this.itemIds[randomIndex];
-            const selectedQuantity = this.quantities[randomIndex];
+            
+            // Get quantity for this item - can be a fixed number or an object with min/max
+            let selectedQuantity;
+            const quantityConfig = this.quantities[randomIndex];
+            
+            if (typeof quantityConfig === 'number') {
+                // If it's a fixed number, use it
+                selectedQuantity = quantityConfig;
+            } else if (quantityConfig && typeof quantityConfig === 'object') {
+                // If it's an object with min/max, generate a random number in that range
+                const min = quantityConfig.min || spawnerConfig.defaultQuantityMin;
+                const max = quantityConfig.max || spawnerConfig.defaultQuantityMax;
+                selectedQuantity = Math.floor(Math.random() * (max - min + 1)) + min;
+            } else {
+                // Default fallback
+                selectedQuantity = Math.floor(Math.random() * 
+                    (spawnerConfig.defaultQuantityMax - spawnerConfig.defaultQuantityMin + 1)) + 
+                    spawnerConfig.defaultQuantityMin;
+            }
             
             console.log(`Spawning item: ${selectedItemId} with quantity: ${selectedQuantity}`);
 

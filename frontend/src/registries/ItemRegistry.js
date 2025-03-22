@@ -15,6 +15,7 @@ export class ItemRegistry extends Registry {
         { id: 'whole-ham', model: 'whole-ham.glb', scale: 0.7 },
         { id: 'bacon-raw', model: 'bacon-raw.glb', scale: 0.6 },
         { id: 'beef-raw', model: 'beef-raw.glb', scale: 0.6 },
+        { id: 'burger-cheese-double', model: 'burger-cheese-double.glb', scale: 0.6 },
 
         // Breads and Baked Goods
         { id: 'loaf-baguette', model: 'loaf-baguette.glb', scale: 0.6 },
@@ -47,6 +48,7 @@ export class ItemRegistry extends Registry {
         { id: 'carrot', model: 'carrot.glb', scale: 0.8 },
         // Prepared Foods
         { id: 'pizza', model: 'pizza.glb', scale: 0.7 },
+        { id: 'hot-dog', model: 'hot-dog.glb', scale: 1 },
         { id: 'sandwich', model: 'sandwich.glb', scale: 0.6 },
         { id: 'salad', model: 'salad.glb', scale: 0.6 },
         { id: 'sub', model: 'sub.glb', scale: 0.7 },
@@ -71,6 +73,8 @@ export class ItemRegistry extends Registry {
         { id: 'popsicle', model: 'popsicle.glb', scale: 0.5 },
         { id: 'popsicle-chocolate', model: 'popsicle-chocolate.glb', scale: 0.5 },
         { id: 'whipped-cream', model: 'whipped-cream.glb', scale: 0.5 },
+        { id: 'honey', model: 'honey.glb', scale: 0.5 },
+        { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5 },
 
         // Beverages
         { id: 'wine-red', model: 'wine-red.glb', scale: 0.8 },

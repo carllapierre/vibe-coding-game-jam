@@ -10,6 +10,7 @@ import { assetPath } from './utils/pathHelper.js';
 import { DebugManager } from './debug/DebugManager.js';
 import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
+import { spawner as spawnerConfig } from './config.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -70,16 +71,26 @@ ItemRegistry.forEach(item => {
 SpawnableRegistry.initialize(ItemRegistry.items.map(item => ({
     ...item,
     scale: item.scale * 2.0,
-    quantity: 5,
+    quantityMin: 1,
+    quantityMax: 5, 
 })));
 
 // Some customization for spawnables
 SpawnableRegistry.updateSpawnableProperties(['carrot', 'cup-coffee'], {
-    quantity: 1,
-    glowColor: 0x65e553, //green
-    shadowColor: 0x65e553,
-    particleColor: 0x65e553,
+    quantityMin: 1,  // Only 1 for boost items
+    quantityMax: 1,
+    glowColor: spawnerConfig.colors.boost, //green
+    shadowColor: spawnerConfig.colors.boost,
+    particleColor: spawnerConfig.colors.boost,
 });
+
+
+SpawnableRegistry.updateSpawnableProperties(['wine-white', 'wine-red', 'peanut-butter', 'honey'], {
+    glowColor: spawnerConfig.colors.debuff, //red
+    shadowColor: spawnerConfig.colors.debuff,
+    particleColor: spawnerConfig.colors.debuff,
+});
+
 
 
 // 3. Initialize world manager (which now doesn't register items again)

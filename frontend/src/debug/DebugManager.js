@@ -1813,7 +1813,7 @@ export class DebugManager {
                             s => s.id === change.id && s.instanceIndex === change.userData.instanceIndex
                         );
                         
-                        // Create spawner data object
+                        // Create spawner data object - only save ID, instance index and position
                         const spawnerData = {
                             id: change.id,
                             instanceIndex: change.userData.instanceIndex,
@@ -1821,9 +1821,7 @@ export class DebugManager {
                                 x: change.position.x,
                                 y: change.position.y,
                                 z: change.position.z
-                            },
-                            items: Array.isArray(change.userData.items) ? change.userData.items : [change.userData.items],
-                            cooldown: change.userData.cooldown || 5000
+                            }
                         };
                         
                         // Update or add to world data
@@ -1844,9 +1842,10 @@ export class DebugManager {
                                 spawner.position.copy(change.position);
                             }
                         }
+                        
                         successCount++;
                     } catch (error) {
-                        console.error(`Error updating spawner: ${error.message}`);
+                        console.error(`Failed to update spawner ${change.id}:`, error);
                         failCount++;
                     }
                 } 
@@ -2171,12 +2170,11 @@ export class DebugManager {
             const spawnerVisual = this.createSpawnerVisual(spawnerInfo);
             spawnerVisual.position.copy(position);
             
-            // Add metadata for identification
+            // Add metadata for identification - store ID and instance index only
+            // We don't store cooldown and items anymore as they come from registry
             spawnerVisual.userData.type = 'spawner';
             spawnerVisual.userData.id = spawnerId;
             spawnerVisual.userData.instanceIndex = instanceIndex;
-            spawnerVisual.userData.cooldown = spawnerInfo.cooldown;
-            spawnerVisual.userData.items = spawnerInfo.items;
             
             // Add to scene
             this.scene.add(spawnerVisual);

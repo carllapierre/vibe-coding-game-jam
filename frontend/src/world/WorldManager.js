@@ -3,6 +3,9 @@ import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTF
 import { ItemSpawner } from '../spawners/ItemSpawner.js';
 import worldManagerService from '../services/WorldManagerService.js';
 import { ObjectRegistry } from '../registries/ObjectRegistry.js';
+import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
+import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
+import { spawner as spawnerConfig } from '../config.js';
 
 export class WorldManager {
     constructor(scene) {
@@ -484,25 +487,53 @@ export class WorldManager {
                 spawnerConfig.position.z
             );
 
-            // Handle both itemIds array and items object formats
-            let itemIds, quantities;
-            if (spawnerConfig.itemIds) {
-                itemIds = spawnerConfig.itemIds;
-                quantities = spawnerConfig.quantities || itemIds.map(() => 1);
-                console.log(`Spawner ${index} using itemIds format:`, { itemIds, quantities });
-            } else if (spawnerConfig.items) {
-                itemIds = spawnerConfig.items.map(item => item.id);
-                quantities = spawnerConfig.items.map(item => item.quantity || 1);
-                console.log(`Spawner ${index} using items format:`, { itemIds, quantities });
-            } else {
-                console.warn(`No items or itemIds found in spawner config at index ${index}`);
+            // Get spawner configuration from registry instead of world data
+            const spawnerId = spawnerConfig.id;
+            const registrySpawner = SpawnerRegistry.items.find(item => item.id === spawnerId);
+            
+            if (!registrySpawner) {
+                console.warn(`Spawner ${spawnerId} not found in registry, skipping`);
                 return;
             }
+            
+            // Use the configuration from SpawnerRegistry
+            const itemIds = registrySpawner.items;
+            const cooldown = registrySpawner.cooldown || spawnerConfig.defaultCooldown;
+            
+            // Get quantities from SpawnableRegistry for each item with min/max format
+            const quantities = itemIds.map(itemId => {
+                const spawnableType = SpawnableRegistry.getSpawnableType(itemId);
+                if (!spawnableType) return { min: 1, max: 5 }; // Default
+                
+                // If quantity is directly defined, use it as both min and max for fixed value
+                // or interpret it as max with min=1
+                if (spawnableType.quantity) {
+                    return {
+                        min: spawnableType.quantityMin || 1,
+                        max: spawnableType.quantity
+                    };
+                }
+                
+                // If min/max are defined, use those
+                if (spawnableType.quantityMin || spawnableType.quantityMax) {
+                    return {
+                        min: spawnableType.quantityMin || 1,
+                        max: spawnableType.quantityMax || 5
+                    };
+                }
+                
+                // Default to config
+                return {
+                    min: spawnerConfig.defaultQuantityMin,
+                    max: spawnerConfig.defaultQuantityMax
+                };
+            });
 
-            const cooldown = spawnerConfig.cooldown || 5000;
+            console.log(`Using registry config for spawner ${spawnerId}: cooldown=${cooldown}, items=${itemIds.join(',')}`);
+            console.log(`Quantity ranges:`, quantities.map((q, i) => `${itemIds[i]}: ${q.min}-${q.max}`));
 
             try {
-                // Create spawner with position first, then itemIds
+                // Create spawner with position, itemIds, cooldown, and quantities
                 const spawner = new ItemSpawner(position, itemIds, cooldown, quantities);
                 console.log(`Created spawner at position:`, position);
                 spawner.addToScene(this.scene); // Add to scene after creation

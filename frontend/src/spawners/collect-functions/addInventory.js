@@ -1,37 +1,23 @@
 export const addInventory = (player, collectionData) => {
     if (player.inventory) {
-        // Find first empty slot or slot with same item
-        const slot = player.inventory.slots.findIndex(slot => 
-            slot.item === null || (slot.item && slot.item.id === collectionData.itemId)
-        );
+        // Use the new addItem method which handles stack limits
+        const added = player.inventory.addItem(collectionData.itemId, collectionData.quantity);
         
-        if (slot !== -1) {
-            const wasEmpty = player.inventory.slots[slot].item === null;
+        if (added) {
+            console.log(`Added ${collectionData.quantity} of ${collectionData.itemId} to inventory`);
             
-            // If slot is empty, set the item
-            if (wasEmpty) {
-                player.inventory.slots[slot].item = collectionData.itemId;
-                player.inventory.slots[slot].amount = collectionData.quantity;
-            } else {
-                // Add to existing stack
-                player.inventory.slots[slot].amount += collectionData.quantity;
-            }
-
-            // Notify of amount change if callback exists
-            if (player.inventory.onAmountChange) {
-                player.inventory.onAmountChange(slot, player.inventory.slots[slot].amount);
-            }
-
-            // If this was the selected slot, update the preview
-            if (slot === player.inventory.selectedSlot) {
+            // If the currently selected slot has this item, make sure the preview is updated
+            const selectedSlot = player.inventory.getSelectedSlot();
+            if (selectedSlot && selectedSlot.item === collectionData.itemId) {
                 player.currentItem = collectionData.itemId;
                 player.updatePreviewModel();
             }
-            
-            // If this was the first item collected, select it
-            if (wasEmpty && player.inventory.slots.every((s, i) => i === slot || s.item === null)) {
-                player.inventory.selectSlot(slot);
-            }
+        } else {
+            console.log(`Couldn't add ${collectionData.itemId} to inventory - it might be full`);
         }
+        
+        return added;
     }
+    
+    return false;
 }

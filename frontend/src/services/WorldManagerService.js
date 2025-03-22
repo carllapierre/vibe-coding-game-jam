@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { ItemSpawner } from '../spawners/ItemSpawner.js';
+import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
+import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
+import { spawner as spawnerConfig } from '../config.js';
 
 class WorldManagerService {
     constructor() {
@@ -107,7 +110,7 @@ class WorldManagerService {
         }
     }
     
-    // New method to initialize spawners in the world from loaded data
+    // Initialize spawners in the world from loaded data
     initializeSpawners(scene, character) {
         // First, clean up any previously loaded spawners
         this.cleanupSpawners();
@@ -131,23 +134,62 @@ class WorldManagerService {
                         spawnerData.position.z
                     );
                     
-                    // Save the original data for reference
-                    const itemIds = Array.isArray(spawnerData.items) ? spawnerData.items : [];
-                    const cooldown = spawnerData.cooldown || 10000;
+                    // Get spawner configuration from registry
+                    const spawnerId = spawnerData.id;
+                    const registrySpawner = SpawnerRegistry.items.find(item => item.id === spawnerId);
                     
-                    // Create a new ItemSpawner
+                    if (!registrySpawner) {
+                        console.warn(`Spawner ${spawnerId} not found in registry, skipping`);
+                        return;
+                    }
+                    
+                    // Use the configuration from SpawnerRegistry
+                    const itemIds = registrySpawner.items;
+                    const cooldown = registrySpawner.cooldown || spawnerConfig.defaultCooldown;
+                    
+                    // Get quantities from SpawnableRegistry for each item with min/max format
+                    const quantities = itemIds.map(itemId => {
+                        const spawnableType = SpawnableRegistry.getSpawnableType(itemId);
+                        if (!spawnableType) return { min: 1, max: 5 }; // Default
+                        
+                        // If quantity is directly defined, use it as both min and max for fixed value
+                        // or interpret it as max with min=1
+                        if (spawnableType.quantity) {
+                            return {
+                                min: spawnableType.quantityMin || 1,
+                                max: spawnableType.quantity
+                            };
+                        }
+                        
+                        // If min/max are defined, use those
+                        if (spawnableType.quantityMin || spawnableType.quantityMax) {
+                            return {
+                                min: spawnableType.quantityMin || 1,
+                                max: spawnableType.quantityMax || 5
+                            };
+                        }
+                        
+                        // Default to config
+                        return {
+                            min: spawnerConfig.defaultQuantityMin,
+                            max: spawnerConfig.defaultQuantityMax
+                        };
+                    });
+                    
+                    console.log(`Using registry config for spawner ${spawnerId}: cooldown=${cooldown}, items=${itemIds.join(',')}`);
+                    console.log(`Quantity ranges:`, quantities.map((q, i) => `${itemIds[i]}: ${q.min}-${q.max}`));
+                    
+                    // Create a new ItemSpawner with registry data including quantities
                     const spawner = new ItemSpawner(
                         position,
                         itemIds,
-                        cooldown
+                        cooldown,
+                        quantities
                     );
                     
                     // Store the instance index for saving/updating
                     spawner.instanceIndex = spawnerData.instanceIndex || Date.now() % 1000000;
                     spawner.id = spawnerData.id;
-                    
-                    // Store the original items and cooldown for use in the debug UI
-                    spawner.itemIds = itemIds; 
                     
                     // Add to scene
                     spawner.addToScene(scene);

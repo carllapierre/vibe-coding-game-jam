@@ -529,6 +529,28 @@
                     "x": 8.492231488410903,
                     "y": 0,
                     "z": -4.500490524161387
+                },
+                {
+                    "rotationX": 0,
+                    "rotationY": 0,
+                    "rotationZ": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "scaleZ": 1,
+                    "x": 8.405039533748663,
+                    "y": 0,
+                    "z": -9.95545164523351
+                },
+                {
+                    "rotationX": 0,
+                    "rotationY": 0,
+                    "rotationZ": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "scaleZ": 1,
+                    "x": 10.811765542014223,
+                    "y": 0,
+                    "z": -9.95545164523351
                 }
             ]
         },
@@ -1057,7 +1079,7 @@
     ],
     "spawners": [
         {
-            "cooldown": 500,
+            "cooldown": 5000,
             "id": "bottles-1",
             "instanceIndex": 519701,
             "items": [
@@ -1072,20 +1094,29 @@
             }
         },
         {
+            "cooldown": 5000,
             "id": "meat-1",
             "instanceIndex": 699545,
-            "position": {
-                "x": 18.051509274043607,
-                "y": 1.8155217703521973,
-                "z": -17.370492963818858
-            },
             "items": [
                 "beef-raw",
                 "bacon-raw",
                 "turkey",
                 "whole-ham"
             ],
-            "cooldown": 500
+            "position": {
+                "x": 18.051509274043607,
+                "y": 1.1195464098022616,
+                "z": -17.370492963818858
+            }
+        },
+        {
+            "id": "miscellaneous-1",
+            "instanceIndex": 807115,
+            "position": {
+                "x": -1.3283757597997332,
+                "y": -0.2324254061043658,
+                "z": -7.23444415193191
+            }
         }
     ]
 }
