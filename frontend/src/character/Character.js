@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { PointerLockControls } from './../../node_modules/three/examples/jsm/controls/PointerLockControls.js';
-import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { assetPath } from '../utils/pathHelper.js';
 

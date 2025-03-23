@@ -13,6 +13,13 @@ import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { consumeItem } from './spawners/collect-functions/consumeItem.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
+import { api } from './config.js';
+
+// Log environment variables to confirm they're working
+console.log('Environment variables loaded:');
+console.log('API_HOST:', process.env.API_HOST);
+console.log('ENVIRONMENT:', process.env.ENVIRONMENT);
+console.log('API config from config.js:', api);
 
 // Scene setup
 const scene = new THREE.Scene();

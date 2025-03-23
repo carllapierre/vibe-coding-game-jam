@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TransformControls } from './../../../node_modules/three/examples/jsm/controls/TransformControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { getPositionInFrontOfCamera } from '../../utils/SceneUtils.js';
 import { showFeedback } from '../../utils/UIUtils.js';
 

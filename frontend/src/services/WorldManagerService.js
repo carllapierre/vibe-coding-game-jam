@@ -8,15 +8,7 @@ class WorldManagerService {
     constructor() {
         // Default API host
         this.apiHost = 'http://127.0.0.1:5000';
-        
-        // // Try to get from Vite env if available
-        // try {
-        //     if (import.meta.env && import.meta.env.VITE_API_HOST) {
-        //         this.apiHost = import.meta.env.VITE_API_HOST;
-        //     }
-        // } catch (error) {
-        //     console.warn('Using default API host:', this.apiHost);
-        // }
+        this.environment = process?.env?.ENVIRONMENT || 'dev';
 
         // Default world data structure
         this.defaultWorldData = {
@@ -34,11 +26,16 @@ class WorldManagerService {
 
     async getWorldData() {
         try {
-            const response = await fetch(`${this.apiHost}/api/world`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch world data: ${response.statusText}`);
+            let data;
+            if (this.environment === 'dev') {
+                const response = await fetch(`${this.apiHost}/api/world`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch world data: ${response.statusText}`);
+                }
+                data = await response.json();
+            } else {
+                data = require('./src/data/world.json');
             }
-            let data = await response.json();
 
             // Create a deep copy to prevent reference issues
             const worldDataCopy = JSON.parse(JSON.stringify({

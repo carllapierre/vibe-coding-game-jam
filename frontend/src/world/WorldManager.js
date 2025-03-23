@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from './../../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ItemSpawner } from '../spawners/ItemSpawner.js';
 import worldManagerService from '../services/WorldManagerService.js';
 import { ObjectRegistry } from '../registries/ObjectRegistry.js';

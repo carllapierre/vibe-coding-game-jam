@@ -2,6 +2,12 @@
  * Global configuration file for game settings
  */
 
+// API configuration
+export const api = {
+    host: process.env.API_HOST || 'http://localhost:5000',
+    environment: process.env.ENVIRONMENT || 'development'
+};
+
 // Inventory settings
 export const inventory = {
     stackLimit: 32,     // Maximum number of items in a stack
