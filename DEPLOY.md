@@ -60,4 +60,4 @@
 
 5. Click "Deploy site"
 
-The site will be built and deployed automatically. Netlify will also rebuild and redeploy whenever you push changes to your repository. 
+The netlify.toml file is configured to set ENVIRONMENT=production which will ensure the application loads data from the static files rather than trying to reach an API server. 

@@ -3,6 +3,9 @@
   publish = "dist"
   command = "npm run build"
 
+[build.environment]
+  ENVIRONMENT = "production"
+
 # Redirects for single-page application
 [[redirects]]
   from = "/*"

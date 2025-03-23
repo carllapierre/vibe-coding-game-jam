@@ -17,9 +17,7 @@ import { api } from './config.js';
 
 // Log environment variables to confirm they're working
 console.log('Environment variables loaded:');
-console.log('API_HOST:', process.env.API_HOST);
-console.log('ENVIRONMENT:', process.env.ENVIRONMENT);
-console.log('API config from config.js:', api);
+console.log('API config:', api);
 
 // Scene setup
 const scene = new THREE.Scene();

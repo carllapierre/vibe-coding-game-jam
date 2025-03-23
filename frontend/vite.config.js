@@ -4,10 +4,14 @@ import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
 
+// Get the environment mode
+const environment = process.env.ENVIRONMENT || 'development';
+
 export default defineConfig({
-  // Expose environment variables to the browser
+  // Use string replacement instead of process.env
   define: {
-    'process.env': process.env
+    // Replace __ENVIRONMENT__ with the actual environment string
+    __ENVIRONMENT__: JSON.stringify(environment)
   },
   // Other Vite config options can go here
   server: {

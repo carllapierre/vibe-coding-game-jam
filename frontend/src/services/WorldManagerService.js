@@ -3,12 +3,13 @@ import { ItemSpawner } from '../spawners/ItemSpawner.js';
 import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
 import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
 import { spawner as spawnerConfig } from '../config.js';
+import { api } from '../config.js';
 
 class WorldManagerService {
     constructor() {
-        // Default API host
-        this.apiHost = 'http://127.0.0.1:5000';
-        this.environment = process?.env?.ENVIRONMENT || 'dev';
+        // Get API host from config
+        this.apiHost = api.host || '';
+        this.environment = api.environment || 'production';
 
         // Default world data structure
         this.defaultWorldData = {
@@ -27,14 +28,15 @@ class WorldManagerService {
     async getWorldData() {
         try {
             let data;
-            if (this.environment === 'dev') {
+            if (this.environment === 'development' && this.apiHost) {
+                // Development mode with API server
                 const response = await fetch(`${this.apiHost}/api/world`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch world data: ${response.statusText}`);
                 }
                 data = await response.json();
             } else {
-                // Use fetch for production as well, just with a different path
+                // Production mode or static deployment - load from local file
                 const response = await fetch('/src/data/world.json');
                 if (!response.ok) {
                     throw new Error(`Failed to load world data: ${response.statusText}`);
