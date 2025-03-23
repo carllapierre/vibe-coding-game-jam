@@ -4,7 +4,6 @@ import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
 import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
 import { spawner as spawnerConfig } from '../config.js';
 import { api } from '../config.js';
-import { embeddedWorldData } from '../data/embeddedWorldData.js';
 
 class WorldManagerService {
     constructor() {
@@ -29,26 +28,52 @@ class WorldManagerService {
     async getWorldData() {
         try {
             let data;
-            
-            // In production mode, use the embedded data
-            if (this.environment === 'production') {
-                console.log('Loading embedded world data in production mode');
-                // Use the embedded data directly
-                data = embeddedWorldData;
-            }
-            // In development mode with API, fetch from server
-            else if (this.environment === 'development' && this.apiHost) {
-                console.log('Loading world data from API in development mode');
+            if (this.environment === 'development' && this.apiHost) {
+                // Development mode with API server
                 const response = await fetch(`${this.apiHost}/api/world`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch world data: ${response.statusText}`);
                 }
                 data = await response.json();
-            }
-            // Fallback to embedded data
-            else {
-                console.log('Using embedded world data as fallback');
-                data = embeddedWorldData;
+            } else {
+                // Production mode or static deployment - try multiple paths
+                console.log('Loading world data in production mode');
+                
+                // List of paths to try in order
+                const pathsToTry = [
+                    './world.json',      // Root directory
+                    '/world.json',       // Absolute path
+                    '/assets/world.json', // Assets directory
+                    '/data/world.json'   // Data directory
+                ];
+                
+                let loaded = false;
+                let lastError = null;
+                
+                // Try each path until one works
+                for (const path of pathsToTry) {
+                    try {
+                        console.log(`Trying to load world.json from: ${path}`);
+                        const response = await fetch(path);
+                        
+                        if (response.ok) {
+                            data = await response.json();
+                            console.log(`Successfully loaded world.json from: ${path}`);
+                            loaded = true;
+                            break;
+                        } else {
+                            console.warn(`Failed to load from ${path}: ${response.status} ${response.statusText}`);
+                        }
+                    } catch (err) {
+                        console.warn(`Error loading from ${path}:`, err.message);
+                        lastError = err;
+                    }
+                }
+                
+                if (!loaded) {
+                    console.error('Failed to load world.json from any path');
+                    throw lastError || new Error('Failed to load world data from any path');
+                }
             }
 
             // Create a deep copy to prevent reference issues
