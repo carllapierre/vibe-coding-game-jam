@@ -4,7 +4,7 @@ export class ItemRegistry extends Registry {
 
     static items = [
         // Meats
-        { id: 'turkey', model: 'turkey.glb', scale: 0.6, },
+        { id: 'turkey', model: 'turkey.glb', scale: 0.6 },
         { id: 'meat-cooked', model: 'meat-cooked.glb', scale: 0.7 },
         { id: 'meat-patty', model: 'meat-patty.glb', scale: 0.6 },
         { id: 'meat-raw', model: 'meat-raw.glb', scale: 0.6 },
@@ -46,6 +46,7 @@ export class ItemRegistry extends Registry {
         { id: 'paprika-slice', model: 'paprika-slice.glb', scale: 0.5 },
         { id: 'radish', model: 'radish.glb', scale: 0.4 },
         { id: 'carrot', model: 'carrot.glb', scale: 0.8 },
+        
         // Prepared Foods
         { id: 'pizza', model: 'pizza.glb', scale: 0.7 },
         { id: 'hot-dog', model: 'hot-dog.glb', scale: 1 },
@@ -87,17 +88,28 @@ export class ItemRegistry extends Registry {
 
         // Condiments
         { id: 'soy', model: 'soy.glb', scale: 0.5 },
-        { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5 },
         { id: 'shaker-pepper', model: 'shaker-pepper.glb', scale: 0.5 },
         { id: 'shaker-salt', model: 'shaker-salt.glb', scale: 0.5 },
 
-
-        // Non-edible items
-        { id: 'pizza-box', model: 'pizza-box.glb', scale: 0.5 },
-        { id: 'plate-deep', model: 'plate-deep.glb', scale: 0.5 },
-        { id: 'utensil-fork', model: 'utensil-fork.glb', scale: 0.5 },
-        { id: 'utensil-spoon', model: 'utensil-spoon.glb', scale: 0.5 },
-        { id: 'utensil-knife', model: 'utensil-knife.glb', scale: 0.5 },
-
+        // Non-edible items (non-consumable)
+        { id: 'pizza-box', model: 'pizza-box.glb', scale: 0.5, isConsumable: false },
+        { id: 'plate-deep', model: 'plate-deep.glb', scale: 0.5, isConsumable: false },
+        { id: 'utensil-fork', model: 'utensil-fork.glb', scale: 0.5, isConsumable: false },
+        { id: 'utensil-spoon', model: 'utensil-spoon.glb', scale: 0.5, isConsumable: false },
+        { id: 'utensil-knife', model: 'utensil-knife.glb', scale: 0.5, isConsumable: false },
     ];
+    
+    /**
+     * Update or add properties for specific items
+     * @param {Array<string>} itemIds - Array of item IDs to update
+     * @param {Object} properties - Properties to apply to the items
+     */
+    static updateItemProperties(itemIds, properties) {
+        itemIds.forEach(id => {
+            const item = this.items.find(item => item.id === id);
+            if (item) {
+                Object.assign(item, properties);
+            }
+        });
+    }
 }

@@ -10,6 +10,7 @@ import { ItemRegistry } from './registries/ItemRegistry.js';
 import { assetPath } from './utils/pathHelper.js';
 import { EditorCore } from './world/editor/EditorCore.js';
 import { addInventory } from './spawners/collect-functions/addInventory.js';
+import { consumeItem } from './spawners/collect-functions/consumeItem.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
 
@@ -28,6 +29,11 @@ const postProcessing = new PostProcessingComposer(renderer, scene, camera, {
     bloomRadius: 0.4,
     bloomThreshold: 0.2
 });
+
+// Disable context menu on right-click to enable right-click for consuming items
+document.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+}, false);
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -53,9 +59,21 @@ const hotbar = new Hotbar(inventory, ItemRegistry);
 
 characterViewContainer.appendChild(hotbar.container);
 
+// Setup item properties and functions
 ItemRegistry.forEach(item => {
+    // Default actions
     item.onCollect = addInventory;
     item.modelPath = assetPath(`objects/${item.model}`);
+    
+    // Set consumable property (default: true, except for non-food items)
+    if (item.isConsumable === undefined) {
+        item.isConsumable = true;
+    }
+    
+    // Set up default right-click handler for consumable items
+    if (item.isConsumable !== false && !item.onRightClick) {
+        item.onRightClick = consumeItem;
+    }
 });
 
 // convert all items to spawnables
@@ -81,8 +99,6 @@ SpawnableRegistry.updateSpawnableProperties(['wine-white', 'wine-red', 'peanut-b
     shadowColor: spawnerConfig.colors.debuff,
     particleColor: spawnerConfig.colors.debuff,
 });
-
-
 
 // 3. Initialize world manager (which now doesn't register items again)
 const worldManager = new WorldManager(scene);

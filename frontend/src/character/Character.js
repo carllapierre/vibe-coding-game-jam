@@ -175,6 +175,11 @@ export class Character {
         this.previewGrowStartTime = 0;
         this.growDuration = 500;
         
+        // Add consume animation properties
+        this.isConsumeAnimating = false;
+        this.consumeAnimationStartTime = 0;
+        this.consumeAnimationDuration = 500;
+        
         this.currentFoodIndex = null;  // Start with no food selected
         this.currentItem = null;   // Start with no food item
         this.previewModel = null;
@@ -230,42 +235,101 @@ export class Character {
     }
 
     handleMouseDown(event) {
-        if (this.controls.isLocked && event.button === 0 && !this.isThrowAnimating) {
-            // Only throw if we have a valid food item and items in inventory
-            if (this.currentItem && this.inventory) {
-                const slot = this.inventory.getSelectedSlot();
-                if (slot.item && slot.amount > 0) {
-                    const direction = new THREE.Vector3();
-                    this.camera.getWorldDirection(direction);
-                    
-
-                    const itemConfig = this.itemRegistry.getType(this.currentItem);
-                    const projectile = new FoodProjectile({
-                        scene: this.scene,
-                        position: this.camera.position.clone().add(direction.multiplyScalar(2)),
-                        direction: direction,
-                        path: itemConfig.modelPath,
-                        scale: itemConfig.scale,
-                        speed: 0.5,
-                        gravity: 0.01,
-                        arcHeight: 0.2,
-                        lifetime: 5000
-                    });
-                    
-                    FoodProjectile.registerProjectile(projectile);
-
-                    this.isThrowAnimating = true;
-                    this.throwAnimationStartTime = Date.now();
-
-                    // Notify inventory that an item was consumed
-                    const consumed = this.inventory.consumeSelectedItem();
-                    if (!consumed) {
-                        // If we couldn't consume (ran out), clear the preview
-                        this.clearPreviewModel();
-                    }
-                }
+        if (!this.controls.isLocked || !this.currentItem || !this.inventory) return;
+        
+        const slot = this.inventory.getSelectedSlot();
+        if (!slot.item || slot.amount <= 0) return;
+        
+        const itemConfig = this.itemRegistry.getType(this.currentItem);
+        if (!itemConfig) return;
+        
+        // If any animation is playing, don't allow new actions
+        if (this.isThrowAnimating || this.isConsumeAnimating) return;
+        
+        // Left click (not already animating)
+        if (event.button === 0) {
+            // Use custom onLeftClick function if it exists, otherwise use the default throw behavior
+            if (itemConfig.onLeftClick) {
+                itemConfig.onLeftClick(this, itemConfig);
+            } else {
+                this.throwItem(itemConfig);
             }
         }
+        
+        // Right click (not already animating)
+        else if (event.button === 2) {
+            // Skip consumption for non-consumable items
+            if (itemConfig.isConsumable === false) return;
+            
+            // Use custom onRightClick function if it exists, otherwise use the default consume behavior
+            if (itemConfig.onRightClick) {
+                itemConfig.onRightClick(this, itemConfig);
+            } else {
+                this.consumeItem(itemConfig);
+            }
+        }
+    }
+    
+    // Default throw method
+    throwItem(itemConfig) {
+        const direction = new THREE.Vector3();
+        this.camera.getWorldDirection(direction);
+        
+        const projectile = new FoodProjectile({
+            scene: this.scene,
+            position: this.camera.position.clone().add(direction.multiplyScalar(2)),
+            direction: direction,
+            path: itemConfig.modelPath,
+            scale: itemConfig.scale,
+            speed: 0.5,
+            gravity: 0.01,
+            arcHeight: 0.2,
+            lifetime: 5000
+        });
+        
+        FoodProjectile.registerProjectile(projectile);
+
+        this.isThrowAnimating = true;
+        this.throwAnimationStartTime = Date.now();
+
+        // Notify inventory that an item was consumed
+        const consumed = this.inventory.consumeSelectedItem();
+        if (!consumed) {
+            // If we couldn't consume (ran out), clear the preview
+            this.clearPreviewModel();
+        }
+    }
+    
+    // Default consume method
+    consumeItem(itemConfig) {
+        // Get default or custom health bonus
+        const hpBonus = itemConfig.hpBonus !== undefined ? itemConfig.hpBonus : 100;
+        
+        // Add health and ensure the UI updates
+        if (this.healthManager) {
+            this.healthManager.addHealth(hpBonus);
+        }
+        
+        // Start consume animation - always do this BEFORE consuming the item
+        this.isConsumeAnimating = true;
+        this.consumeAnimationStartTime = Date.now();
+        
+        // Important: For the last item in a stack, make sure we have a valid model
+        // to animate with, even after the item is removed from inventory
+        const isLastItem = this.inventory.getSelectedSlot().amount === 1;
+        
+        // If this is the last item, make sure the model is fully loaded before consuming
+        if (isLastItem && !this.previewModel) {
+            this.updatePreviewModel();
+            // Add a small delay before consuming the item to let the model load
+            setTimeout(() => {
+                this.inventory.consumeSelectedItem();
+            }, 50);
+            return true; // Consider it consumed successfully
+        }
+        
+        // For all other cases, consume immediately
+        return this.inventory.consumeSelectedItem();
     }
 
     clearPreviewModel() {
@@ -690,7 +754,81 @@ export class Character {
                     }
                 }
             }
-        } else if (this.previewModel) {
+        } 
+        else if (this.isConsumeAnimating) {
+            const elapsed = Date.now() - this.consumeAnimationStartTime;
+            const progress = Math.min(elapsed / this.consumeAnimationDuration, 1);
+            
+            // Moving the hand toward the mouth animation
+            const mouthDistance = Math.sin(progress * Math.PI) * 0.3;
+            this.handMesh.position.z += mouthDistance;
+            this.handMesh.position.y += mouthDistance * 0.5;
+            
+            // Only animate if we have a preview model
+            if (this.previewModel) {
+                // Keep the preview model visible but make it shrink and move toward the camera
+                this.previewModel.visible = true;
+                
+                // Calculate shrink factor - start at original size and shrink to 10% at the end
+                const shrinkFactor = 1 - (progress * 0.9);
+                const originalScale = this.previewModel.baseScale;
+                const scale = originalScale * shrinkFactor;
+                
+                // Update scale to create shrinking effect
+                this.previewModel.scale.set(scale, scale, scale);
+                
+                // Move the item closer to the camera/mouth as animation progresses
+                const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
+                
+                // Modified animation: Move item toward the bottom-center (player's mouth)
+                // instead of just toward the center of the screen
+                handTipOffset.x -= progress * 0.5; // Move toward center horizontally (more centered)
+                handTipOffset.y -= progress * 0.2; // Move downward toward mouth instead of upward
+                handTipOffset.z += progress * 0.7; // Move closer to camera
+                
+                handTipOffset.applyQuaternion(this.camera.quaternion);
+                this.previewModel.position.copy(this.camera.position).add(handTipOffset);
+                
+                // Add a slight rotation as if the item is being oriented for eating
+                this.previewModel.quaternion.copy(this.camera.quaternion);
+                const eatRotationX = Math.PI / 4 - (progress * Math.PI / 4); // More rotation to align with mouth
+                const eatRotationY = Math.PI / 4 + (progress * Math.PI / 16);
+                this.previewModel.rotateX(eatRotationX);
+                this.previewModel.rotateY(eatRotationY);
+                
+                // Make the item fully transparent at the very end
+                if (progress > 0.8) {
+                    const finalOpacity = 1 - ((progress - 0.8) * 5); // Fade out in the last 20% of animation
+                    this.previewModel.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            // If the material isn't already set up for transparency
+                            if (!child.material.transparent) {
+                                child.material.transparent = true;
+                                child.material.needsUpdate = true;
+                            }
+                            child.material.opacity = finalOpacity;
+                        }
+                    });
+                }
+            }
+            
+            if (progress === 1) {
+                this.isConsumeAnimating = false;
+                
+                // When animation is complete, check if we need to clear the model
+                if (this.inventory) {
+                    const currentSlot = this.inventory.getSelectedSlot();
+                    if (currentSlot && currentSlot.item) {
+                        this.updatePreviewModel();
+                    } else {
+                        this.clearPreviewModel();
+                    }
+                } else {
+                    this.clearPreviewModel();
+                }
+            }
+        }
+        else if (this.previewModel) {
             this.previewModel.visible = true;
             const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
             handTipOffset.applyQuaternion(this.camera.quaternion);

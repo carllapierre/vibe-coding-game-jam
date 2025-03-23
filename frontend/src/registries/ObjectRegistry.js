@@ -4,6 +4,8 @@ export class ObjectRegistry extends Registry {
     static DEFAULT_PATH = 'scene/';
     
     static items = [
+        { id: 'pieter', model: 'pieter.glb', scale: 1.0 },
+
         // Walls and Structure
         { id: 'wall', model: 'wall.glb', scale: 1.0 },
         { id: 'wall-corner', model: 'wall-corner.glb', scale: 1.0 },
