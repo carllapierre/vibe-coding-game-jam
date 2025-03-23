@@ -1,9 +1,0 @@
-# Headers for specific paths
-/world.json
-  Content-Type: application/json
-
-/assets/world.json
-  Content-Type: application/json
-
-/data/world.json
-  Content-Type: application/json 
