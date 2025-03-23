@@ -15,9 +15,8 @@ import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
 import { api } from './config.js';
 
-// Log environment variables to confirm they're working
-console.log('Environment variables loaded:');
-console.log('API config:', api);
+// Log current configuration
+console.log('Current configuration:', api);
 
 // Scene setup
 const scene = new THREE.Scene();

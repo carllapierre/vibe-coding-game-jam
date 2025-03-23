@@ -1,12 +1,12 @@
 /**
- * Development configuration file for game settings
+ * Production configuration file for game settings
  */
 
-// API configuration
+// API configuration - static deployment mode
 export const api = {
-    // Use localhost for development
-    host: 'http://localhost:5000',
-    environment: 'development'
+    // Empty host for production (static deployment)
+    host: '',
+    environment: 'production'
 };
 
 // Inventory settings
@@ -20,4 +20,4 @@ export const spawner = {
         debuff: 0xff0000, //red
         misc: 0x0000ff, //blue
     }
-};
+}; 
