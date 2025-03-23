@@ -258,13 +258,16 @@ export class EditorCore {
                 this.transformManager.setMode('rotate');
                 break;
             case '3': 
-                this.transformManager.setMode('scale');
+                this.transformManager.setAxisScaleMode();
                 break;
             case '4': 
                 this.transformManager.setUniformScaleMode();
                 break;
             case '5': 
                 this.transformManager.setSnapRotationMode();
+                break;
+            case '6': 
+                this.transformManager.setMode('scale');
                 break;
                 
             // Object manipulation keys

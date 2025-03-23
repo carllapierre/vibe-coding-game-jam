@@ -147,6 +147,19 @@ export class TransformManager {
     }
     
     /**
+     * Create individual axis scale mode
+     */
+    setAxisScaleMode() {
+        // Clear any existing custom handlers by setting null onChange
+        this.setMode('scale', {
+            showX: true, 
+            showY: true, 
+            showZ: true,
+            onChange: null
+        });
+    }
+    
+    /**
      * Create snap rotation mode
      */
     setSnapRotationMode() {

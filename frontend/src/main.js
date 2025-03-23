@@ -24,8 +24,8 @@ document.body.appendChild(renderer.domElement);
 const postProcessing = new PostProcessingComposer(renderer, scene, camera, {
     brightness: 4.5,  // Increase brightness (1.0 is normal)
     saturation: 1.1,  // Keep the default saturation
-    bloomStrength: 0.6,
-    bloomRadius: 0.8,
+    bloomStrength: 0.4,
+    bloomRadius: 0.4,
     bloomThreshold: 0.2
 });
 
@@ -35,16 +35,6 @@ scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
 directionalLight.position.set(0, 10, 0);
 scene.add(directionalLight);
-
-// Ground
-const groundGeometry = new THREE.PlaneGeometry(100, 100);
-const groundMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x808080,
-    side: THREE.DoubleSide
-});
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
 
 // Create views containers
 const characterViewContainer = document.createElement('div');

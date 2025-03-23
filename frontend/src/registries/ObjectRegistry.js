@@ -49,8 +49,29 @@ export class ObjectRegistry extends Registry {
         { id: 'barrel-open', model: 'barrel-open.glb', scale: 1.0, pathOverride: 'boxes/' },
 
 
+        // Prototype
+
         { id: 'floor-thick', model: 'floor-thick.glb', scale: 1.0, pathOverride: 'prototype/' },
-        { id: 'stairs-large', model: 'stairs-large.glb', scale: 1.0, pathOverride: 'prototype/' },
+        { id: 'stairs-small', model: 'stairs-small.glb', scale: 1.0, pathOverride: 'prototype/' },
+
+
+        // Furniture
+        { id: 'toilet', model: 'toilet.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'table-cross', model: 'tableCross.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'table-coffee', model: 'tableCoffee.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'potted-plant', model: 'pottedPlant.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'plant-small-3', model: 'plantSmall3.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'plant-small-2', model: 'plantSmall2.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'plant-small-1', model: 'plantSmall1.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'lounge-sofa-corner', model: 'loungeSofaCorner.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'lounge-sofa', model: 'loungeSofa.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'lamp-round-floor', model: 'lampRoundFloor.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-sink', model: 'kitchenSink.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-fridge', model: 'kitchenFridge.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-coffee-machine', model: 'kitchenCoffeeMachine.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-cabinet', model: 'kitchenCabinet.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-blender', model: 'kitchenBlender.glb', scale: 1.0, pathOverride: 'furniture/' },
+        { id: 'kitchen-bar', model: 'kitchenBar.glb', scale: 1.0, pathOverride: 'furniture/' }
         
     ];
 

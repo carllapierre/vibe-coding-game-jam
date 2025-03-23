@@ -89,6 +89,15 @@ export class ItemRegistry extends Registry {
         { id: 'soy', model: 'soy.glb', scale: 0.5 },
         { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5 },
         { id: 'shaker-pepper', model: 'shaker-pepper.glb', scale: 0.5 },
-        { id: 'shaker-salt', model: 'shaker-salt.glb', scale: 0.5 }
+        { id: 'shaker-salt', model: 'shaker-salt.glb', scale: 0.5 },
+
+
+        // Non-edible items
+        { id: 'pizza-box', model: 'pizza-box.glb', scale: 0.5 },
+        { id: 'plate-deep', model: 'plate-deep.glb', scale: 0.5 },
+        { id: 'utensil-fork', model: 'utensil-fork.glb', scale: 0.5 },
+        { id: 'utensil-spoon', model: 'utensil-spoon.glb', scale: 0.5 },
+        { id: 'utensil-knife', model: 'utensil-knife.glb', scale: 0.5 },
+
     ];
 }
