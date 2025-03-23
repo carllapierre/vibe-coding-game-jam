@@ -45,8 +45,8 @@ class WorldManagerService {
                     throw new Error(`Failed to load world data: ${response.statusText}`);
                 }
                 data = await response.json();
+                return data;
             }
-            console.log('Data:', data);
 
             // Create a deep copy to prevent reference issues
             const worldDataCopy = JSON.parse(JSON.stringify({
@@ -54,6 +54,8 @@ class WorldManagerService {
                 objects: data.objects || [],
                 spawners: data.spawners || []
             }));
+
+            console.log('World data copy:', worldDataCopy);
 
             return worldDataCopy;
         } catch (error) {
