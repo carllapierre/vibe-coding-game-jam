@@ -5,23 +5,6 @@
     },
     "objects": [
         {
-            "id": "wall-door-rotate",
-            "instances": [
-                {
-                    "rotationY": 1.5707963267948966,
-                    "x": 0,
-                    "y": 0,
-                    "z": -10
-                },
-                {
-                    "rotationY": 3.141592653589793,
-                    "x": 6,
-                    "y": 6.109439669051669,
-                    "z": 6
-                }
-            ]
-        },
-        {
             "id": "wall-door",
             "instances": [
                 {

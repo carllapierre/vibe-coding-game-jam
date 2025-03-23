@@ -9,12 +9,12 @@ export class ObjectRegistry extends Registry {
         // Walls and Structure
         { id: 'wall', model: 'wall.glb', scale: 1.0 },
         { id: 'wall-corner', model: 'wall-corner.glb', scale: 1.0 },
-        { id: 'wall-door-rotate', model: 'wall-door-rotate.glb', scale: 1.0 },
+        { id: 'wall-door', model: 'wall-door-rotate.glb', scale: 1.0 },
         { id: 'wall-window', model: 'wall-window.glb', scale: 1.0 },
         { id: 'column', model: 'column.glb', scale: 1.0 },
         { id: 'floor', model: 'floor.glb', scale: 1.0 },
         { id: 'fence', model: 'fence.glb', scale: 1.0 },
-        { id: 'fence-door-rotate', model: 'fence-door-rotate.glb', scale: 1.0 },
+        { id: 'fence-door', model: 'fence-door-rotate.glb', scale: 1.0 },
 
         // Store Fixtures
         { id: 'freezer', model: 'freezer.glb', scale: 1.0 },
