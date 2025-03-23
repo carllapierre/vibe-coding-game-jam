@@ -40,11 +40,13 @@ class WorldManagerService {
                 // Production mode or static deployment - load from local file
                 // In production builds, we need to use the root path instead of /src
                 const response = await fetch('/world.json');
+                console.log('Response:', response);
                 if (!response.ok) {
                     throw new Error(`Failed to load world data: ${response.statusText}`);
                 }
                 data = await response.json();
             }
+            console.log('Data:', data);
 
             // Create a deep copy to prevent reference issues
             const worldDataCopy = JSON.parse(JSON.stringify({
