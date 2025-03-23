@@ -1,9 +1,0 @@
-# Netlify redirects file
-
-# Ensure world.json is served with the right content type
-/world.json /world.json 200! Content-Type=application/json
-/assets/world.json /assets/world.json 200! Content-Type=application/json
-/data/world.json /data/world.json 200! Content-Type=application/json
-
-# Single page application fallback
-/* /index.html 200 
