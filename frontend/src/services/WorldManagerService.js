@@ -14,7 +14,6 @@ class WorldManagerService {
         // Default world data structure
         this.defaultWorldData = {
             settings: {
-                modelBasePath: '/public/assets/scene/',
                 scaleFactor: 3.5
             },
             objects: [],
