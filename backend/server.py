@@ -4,7 +4,8 @@ import json
 import os
 
 app = Flask(__name__)
-CORS(app)
+# For development environments only - allows all origins
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 WORLD_DATA_PATH = './data/world.json'
 

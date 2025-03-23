@@ -28,6 +28,7 @@ class WorldManagerService {
     async getWorldData() {
         try {
             let data;
+            console.log('Environment:', this.environment);
             if (this.environment === 'development' && this.apiHost) {
                 // Development mode with API server
                 const response = await fetch(`${this.apiHost}/api/world`);
@@ -38,7 +39,7 @@ class WorldManagerService {
             } else {
                 // Production mode or static deployment - load from local file
                 // In production builds, we need to use the root path instead of /src
-                const response = await fetch('./world.json');
+                const response = await fetch('/world.json');
                 if (!response.ok) {
                     throw new Error(`Failed to load world data: ${response.statusText}`);
                 }
