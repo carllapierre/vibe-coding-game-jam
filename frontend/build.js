@@ -3,20 +3,36 @@ const path = require('path');
 
 // Source and destination paths for the world.json file
 const sourceFile = path.join(__dirname, '..', 'backend', 'data', 'world.json');
-const destFile = path.join(__dirname, 'src', 'data', 'world.json');
+const srcDataFile = path.join(__dirname, 'src', 'data', 'world.json');
+const publicFile = path.join(__dirname, 'public', 'world.json');
 
-// Ensure the destination directory exists
-const destDir = path.dirname(destFile);
-if (!fs.existsSync(destDir)) {
-  fs.mkdirSync(destDir, { recursive: true });
+// Ensure the source data directory exists
+const srcDataDir = path.dirname(srcDataFile);
+if (!fs.existsSync(srcDataDir)) {
+  fs.mkdirSync(srcDataDir, { recursive: true });
 }
 
-// Copy the world.json file
+// Ensure the public directory exists
+const publicDir = path.dirname(publicFile);
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
+// Copy the world.json file to src/data for development
 try {
-  fs.copyFileSync(sourceFile, destFile);
-  console.log(`Successfully copied world.json from backend to frontend.`);
+  fs.copyFileSync(sourceFile, srcDataFile);
+  console.log(`Successfully copied world.json to src/data for development.`);
 } catch (err) {
-  console.error(`Error copying world.json: ${err.message}`);
+  console.error(`Error copying world.json to src/data: ${err.message}`);
+  process.exit(1);
+}
+
+// Copy the world.json file to public for production build
+try {
+  fs.copyFileSync(sourceFile, publicFile);
+  console.log(`Successfully copied world.json to public for production build.`);
+} catch (err) {
+  console.error(`Error copying world.json to public: ${err.message}`);
   process.exit(1);
 }
 

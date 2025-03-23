@@ -37,7 +37,8 @@ class WorldManagerService {
                 data = await response.json();
             } else {
                 // Production mode or static deployment - load from local file
-                const response = await fetch('/src/data/world.json');
+                // In production builds, we need to use the root path instead of /src
+                const response = await fetch('./world.json');
                 if (!response.ok) {
                     throw new Error(`Failed to load world data: ${response.statusText}`);
                 }
