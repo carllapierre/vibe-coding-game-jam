@@ -34,7 +34,12 @@ class WorldManagerService {
                 }
                 data = await response.json();
             } else {
-                data = require('./src/data/world.json');
+                // Use fetch for production as well, just with a different path
+                const response = await fetch('/src/data/world.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to load world data: ${response.statusText}`);
+                }
+                data = await response.json();
             }
 
             // Create a deep copy to prevent reference issues

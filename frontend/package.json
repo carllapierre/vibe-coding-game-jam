@@ -4,8 +4,9 @@
   "description": "A Three.js FPS sandbox starter project",
   "main": "index.js",
   "scripts": {
+    "copy-map": "node build.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run copy-map && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
