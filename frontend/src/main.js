@@ -18,6 +18,12 @@ import { api } from './config.js';
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// Set initial camera position and rotation before creating controls
+// Position it at a higher y value and with some z offset to ensure it's facing the right direction
+camera.position.set(3, 3, 8);  // Start at z=10 looking toward negative z
+camera.lookAt(0, 3.5, 0);  // Look toward the origin at the same height
+
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);

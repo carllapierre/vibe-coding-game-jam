@@ -102,8 +102,11 @@ export class Character {
         this.isMoving = false;
         this.smoothingFactor = 0.25; // Added smoothing factor for transitions
 
-        // Initialize controls
+        // Initialize controls - this will use the camera's current orientation
         this.controls = new PointerLockControls(camera, document.body);
+        
+        // Show loading screen
+        this.showLoadingScreen();
         
         // Hand setup
         this.setupHand();
@@ -132,6 +135,14 @@ export class Character {
             right: false,
             jump: false
         };
+        
+        // Auto-lock controls after a short delay to allow page to fully load
+        setTimeout(() => {
+            if (this.enabled) {
+                this.controls.lock();
+                this.hideLoadingScreen();
+            }
+        }, 500);
     }
 
     setEnabled(enabled) {
@@ -208,6 +219,45 @@ export class Character {
         document.addEventListener('click', () => {
             if (!this.enabled) return;
             this.controls.lock();
+        });
+        
+        // Add pointer lock change event to handle when user exits pointer lock
+        document.addEventListener('pointerlockchange', () => {
+            if (!document.pointerLockElement && this.enabled) {
+                // Don't show the lock message if loading screen is visible
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) return;
+                
+                // Add a message to the screen that instructs the user to click to resume
+                const lockMessage = document.getElementById('lock-message') || (() => {
+                    const msg = document.createElement('div');
+                    msg.id = 'lock-message';
+                    msg.style.position = 'absolute';
+                    msg.style.top = '50%';
+                    msg.style.left = '50%';
+                    msg.style.transform = 'translate(-50%, -50%)';
+                    msg.style.color = 'white';
+                    msg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                    msg.style.padding = '20px';
+                    msg.style.borderRadius = '5px';
+                    msg.style.textAlign = 'center';
+                    msg.style.zIndex = '1000';
+                    document.body.appendChild(msg);
+                    return msg;
+                })();
+                
+                lockMessage.textContent = 'Resume Game';
+                lockMessage.style.display = 'block';
+            } else {
+                // Hide message when controls are locked
+                const lockMessage = document.getElementById('lock-message');
+                if (lockMessage) {
+                    lockMessage.style.display = 'none';
+                }
+                
+                // Also hide loading screen if it's still visible when controls are locked
+                this.hideLoadingScreen();
+            }
         });
     }
 
@@ -925,5 +975,77 @@ export class Character {
 
     getPosition() {
         return this.camera.position;
+    }
+
+    // Create a loading screen that doesn't fully block the view
+    showLoadingScreen() {
+        const loadingScreen = document.createElement('div');
+        loadingScreen.id = 'loading-screen';
+        loadingScreen.style.position = 'absolute';
+        loadingScreen.style.top = '0';
+        loadingScreen.style.left = '0';
+        loadingScreen.style.width = '100%';
+        loadingScreen.style.height = '100%';
+        loadingScreen.style.display = 'flex';
+        loadingScreen.style.flexDirection = 'column';
+        loadingScreen.style.justifyContent = 'center';
+        loadingScreen.style.alignItems = 'center';
+        loadingScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        loadingScreen.style.zIndex = '1000';
+        
+        // Create message container with glassy background
+        const messageContainer = document.createElement('div');
+        messageContainer.style.backgroundColor = 'rgba(30, 30, 30, 0.7)';
+        messageContainer.style.padding = '20px 40px';
+        messageContainer.style.borderRadius = '8px';
+        messageContainer.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        messageContainer.style.backdropFilter = 'blur(5px)';
+        messageContainer.style.display = 'flex';
+        messageContainer.style.flexDirection = 'column';
+        messageContainer.style.alignItems = 'center';
+        messageContainer.style.gap = '15px';
+        
+        // Create loading text
+        const loadingText = document.createElement('div');
+        loadingText.textContent = 'Loading Game...';
+        loadingText.style.color = 'white';
+        loadingText.style.fontSize = '24px';
+        loadingText.style.fontWeight = 'bold';
+        
+        // Create loading spinner
+        const spinner = document.createElement('div');
+        spinner.style.width = '30px';
+        spinner.style.height = '30px';
+        spinner.style.border = '4px solid rgba(255, 255, 255, 0.3)';
+        spinner.style.borderTop = '4px solid white';
+        spinner.style.borderRadius = '50%';
+        spinner.style.animation = 'spin 1s linear infinite';
+        
+        // Add spinning animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Add elements to the DOM
+        messageContainer.appendChild(loadingText);
+        messageContainer.appendChild(spinner);
+        loadingScreen.appendChild(messageContainer);
+        document.body.appendChild(loadingScreen);
+    }
+    
+    hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            loadingScreen.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                loadingScreen.remove();
+            }, 500);
+        }
     }
 } 
