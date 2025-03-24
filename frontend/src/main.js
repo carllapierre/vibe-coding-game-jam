@@ -107,6 +107,13 @@ SpawnableRegistry.updateSpawnableProperties(['wine-white', 'wine-red', 'peanut-b
     particleColor: spawnerConfig.colors.debuff,
 });
 
+
+SpawnableRegistry.updateSpawnableProperties(['cake'], {
+    glowColor: spawnerConfig.colors.rare, //purple
+    shadowColor: spawnerConfig.colors.rare,
+    particleColor: spawnerConfig.colors.rare,
+});
+
 // 3. Initialize world manager (which now doesn't register items again)
 const worldManager = new WorldManager(scene);
 let collidableObjects = [];

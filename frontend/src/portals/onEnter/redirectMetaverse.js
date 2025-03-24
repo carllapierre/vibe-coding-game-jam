@@ -1,5 +1,5 @@
 // Open the metaverse host in a new tab
-const ref = 'https://foodvibers.netlify.app.com';
+const ref = 'https://foodvibers.netlify.app';
 
 export function redirectRandomGame() {
     // in 

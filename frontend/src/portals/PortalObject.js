@@ -4,6 +4,9 @@ import { Text } from 'troika-three-text';
 import { PortalRegistry } from '../registries/PortalRegistry.js';
 
 export class PortalObject extends THREE.Group {
+    // Static flag to prevent any portal from triggering while a redirect is in progress
+    static isRedirectInProgress = false;
+
     /**
      * Create a new portal object
      * @param {string} portalId - Portal ID from registry
@@ -19,6 +22,9 @@ export class PortalObject extends THREE.Group {
             type: 'portal',
             instanceIndex: instanceIndex || Date.now() // Use provided index or timestamp as unique instance index
         };
+
+        // Add flag to track if portal has been triggered
+        this.hasTriggered = false;
 
         // Set position
         this.position.copy(position);
@@ -174,7 +180,7 @@ export class PortalObject extends THREE.Group {
         this.collider = new THREE.Mesh(colliderGeometry, colliderMaterial);
         this.collider.userData.isPortalCollider = true;
         this.collider.userData.portalId = this.userData.id;
-        this.collider.userData.onEnter = this.portalData.onEnter;
+        this.collider.userData.parentPortal = this; // Store reference to parent portal instead
         
         // Position slightly in front of visual
         this.collider.position.z = 0.5;
@@ -205,8 +211,28 @@ export class PortalObject extends THREE.Group {
      * Handle player entering the portal
      */
     onPlayerEnter() {
-        if (this.portalData && typeof this.portalData.onEnter === 'function') {
-            this.portalData.onEnter();
+        // Check both static and instance flags
+        if (!PortalObject.isRedirectInProgress && !this.hasTriggered && 
+            this.portalData && typeof this.portalData.onEnter === 'function') {
+            
+            console.log('Portal triggered - redirecting...');
+            // Set both flags
+            PortalObject.isRedirectInProgress = true;
+            this.hasTriggered = true;
+            
+            // Remove the portal from the scene immediately
+            if (this.parent) {
+                this.parent.remove(this);
+            }
+            
+            // Store the onEnter function
+            const onEnterFn = this.portalData.onEnter;
+            
+            // Clear all references
+            this.dispose();
+            
+            // Execute the redirect
+            onEnterFn();
         }
     }
 
