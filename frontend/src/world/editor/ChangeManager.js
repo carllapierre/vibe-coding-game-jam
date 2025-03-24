@@ -34,6 +34,7 @@ export class ChangeManager {
     recordChange(object) {
         const objectId = object.userData.id;
         const instanceIndex = object.userData.instanceIndex;
+        const objectType = object.userData.type; // Get the object type
         
         if (objectId === undefined || instanceIndex === undefined) {
             console.warn('Cannot record change for object without ID or instance index', object);
@@ -54,6 +55,11 @@ export class ChangeManager {
             };
             
             this.pendingChanges.set(changeId, change);
+            
+            // Log information about the change based on object type
+            if (objectType === 'portal') {
+                console.log(`Recording new change for portal ${objectId} with instanceIndex ${instanceIndex}`);
+            }
 
         } else {
             // Update current state if it's not a delete operation
@@ -62,7 +68,11 @@ export class ChangeManager {
                 change.position = object.position.clone();
                 change.rotation = object.rotation.clone();
                 change.scale = object.scale.clone();
-
+                
+                // Log update for portals
+                if (objectType === 'portal') {
+                    console.log(`Updating existing change for portal ${objectId} with instanceIndex ${instanceIndex}`);
+                }
             }
         }
 
@@ -158,6 +168,11 @@ export class ChangeManager {
                 worldData.spawners = [];
             }
             
+            // Ensure the portals array exists
+            if (!worldData.portals) {
+                worldData.portals = [];
+            }
+            
             // Convert Map to array for processing
             const allChanges = Array.from(this.pendingChanges.values());
             
@@ -174,6 +189,10 @@ export class ChangeManager {
                     // Handle spawner deletion
                     const success = await this.handleSpawnerDeletion(worldData, change, worldManager);
                     success ? successCount++ : failCount++;
+                } else if (change.userData && change.userData.type === 'portal') {
+                    // Handle portal deletion
+                    const success = await this.handlePortalDeletion(worldData, change, worldManager);
+                    success ? successCount++ : failCount++;
                 } else {
                     // Handle regular object deletion
                     const success = await this.handleObjectDeletion(worldData, change);
@@ -181,11 +200,13 @@ export class ChangeManager {
                 }
             }
             
-            // Only explicitly save after spawner deletions, since object deletions
+            // Only explicitly save after spawner or portal deletions, since object deletions
             // are handled by deleteObjectFromWorldData which saves internally
-            const hasSpawnerDeletions = deleteChanges.some(change => change.userData && change.userData.type === 'spawner');
+            const hasSpecialDeletions = deleteChanges.some(change => 
+                change.userData && (change.userData.type === 'spawner' || change.userData.type === 'portal')
+            );
             
-            if (hasSpawnerDeletions) {
+            if (hasSpecialDeletions) {
                 // Save changes to disk for spawner deletions
                 await worldManagerService.saveWorldData(worldData);
             }
@@ -211,8 +232,11 @@ export class ChangeManager {
                     // Handle spawner transform update
                     const success = await this.handleSpawnerTransform(worldData, change);
                     success ? successCount++ : failCount++;
-                } 
-                else if (change.type === 'transform') {
+                } else if (change.type === 'transform' && change.userData && change.userData.type === 'portal') {
+                    // Handle portal transform update
+                    const success = await this.handlePortalTransform(worldData, change);
+                    success ? successCount++ : failCount++;
+                } else if (change.type === 'transform') {
                     // Handle regular object transform update
                     const success = await this.handleObjectTransform(worldData, change, worldManager);
                     success ? successCount++ : failCount++;
@@ -249,14 +273,17 @@ export class ChangeManager {
                 );
             }
             
-            return true;
-        } catch (error) {
-            console.error('Failed to save debug changes:', error);
+            this.changeCount = 0;
+            this.updateChangeIndicator();
             
-            // Show error feedback
+            return successCount > 0;
+            
+        } catch (error) {
+            console.error('Error saving changes:', error);
+            
             showFeedback(
                 this.feedbackElement, 
-                `Error: ${error.message}`,
+                'Error Saving Changes',
                 'rgba(255, 0, 0, 0.7)'
             );
             
@@ -615,5 +642,162 @@ export class ChangeManager {
         this.deletedObjects.clear();
         this.changeCount = 0;
         this.updateChangeIndicator();
+    }
+
+    /**
+     * Handle portal deletion
+     * @param {Object} worldData - World data object
+     * @param {Object} change - Change data
+     * @param {Object} worldManager - World manager instance
+     * @returns {Promise<boolean>} - Success status
+     */
+    async handlePortalDeletion(worldData, change, worldManager) {
+        try {
+            console.log("Handling portal deletion:", change);
+            
+            const portalId = change.id;
+            const instanceIndex = change.userData.instanceIndex;
+            
+            // Ensure portals array exists
+            if (!worldData.portals) {
+                console.log("No portals array found in world data for deletion");
+                worldData.portals = [];
+                return false;
+            }
+            
+            console.log(`Looking for portal ${portalId} with instance ${instanceIndex} in world data with ${worldData.portals.length} portals`);
+            
+            // Find and remove the portal from world data
+            const portalIndex = worldData.portals.findIndex(
+                portal => portal.id === portalId && portal.instanceIndex === instanceIndex
+            );
+            
+            if (portalIndex !== -1) {
+                // Remove from array
+                worldData.portals.splice(portalIndex, 1);
+                
+                console.log(`Deleted portal ${portalId} with instance ${instanceIndex} at index ${portalIndex}`);
+                
+                // Also remove the object from the scene for good (not just visual feedback)
+                // This prevents the portal from "coming back" in the scene
+                const objectToDelete = findObjectWithUserData(this.scene, {
+                    id: portalId,
+                    instanceIndex: instanceIndex,
+                    type: 'portal'
+                });
+                
+                if (objectToDelete) {
+                    // Dispose of resources to prevent memory leaks
+                    if (typeof objectToDelete.dispose === 'function') {
+                        objectToDelete.dispose();
+                    }
+                    
+                    // Remove from scene
+                    this.scene.remove(objectToDelete);
+                    console.log(`Removed portal object from scene`);
+                } else {
+                    console.warn(`Could not find portal object in scene to remove`);
+                }
+                
+                // Log remaining portals
+                console.log(`${worldData.portals.length} portals remain after deletion`);
+                
+                return true;
+            } else {
+                console.warn(`Portal ${portalId} with instance ${instanceIndex} not found in world data for deletion`);
+                return false;
+            }
+        } catch (error) {
+            console.error('Error handling portal deletion:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Handle portal transform update
+     * @param {Object} worldData - World data object
+     * @param {Object} change - Change data
+     * @returns {Promise<boolean>} - Success status
+     */
+    async handlePortalTransform(worldData, change) {
+        try {
+            console.log("Handling portal transform:", change);
+            
+            const portalId = change.id;
+            const instanceIndex = change.userData.instanceIndex;
+            
+            // Ensure portals array exists
+            if (!worldData.portals) {
+                console.log("Creating portals array in world data");
+                worldData.portals = [];
+            }
+            
+            // Find the portal in world data - use strict equality for instanceIndex comparison
+            const portalIndex = worldData.portals.findIndex(
+                portal => portal.id === portalId && 
+                          portal.instanceIndex === instanceIndex
+            );
+            
+            console.log(`Looking for portal ${portalId} with instance ${instanceIndex} - found at index: ${portalIndex}`);
+            
+            // Portal data to update/insert
+            const portalData = {
+                id: portalId,
+                instanceIndex: instanceIndex,
+                position: {
+                    x: change.position.x,
+                    y: change.position.y,
+                    z: change.position.z
+                },
+                rotation: {
+                    x: change.rotation.x,
+                    y: change.rotation.y,
+                    z: change.rotation.z
+                },
+                scale: {
+                    x: change.scale.x,
+                    y: change.scale.y,
+                    z: change.scale.z
+                }
+            };
+            
+            // Add any custom userData
+            if (change.userData.label) {
+                portalData.label = change.userData.label;
+            }
+            
+            if (portalIndex !== -1) {
+                // Update existing portal
+                console.log(`Updating existing portal at index ${portalIndex}`);
+                worldData.portals[portalIndex] = portalData;
+            } else {
+                // Before adding a new portal, check if there's any portal with the same position
+                // This prevents duplicates with different instanceIndex values
+                const duplicateAtPosition = worldData.portals.findIndex(
+                    portal => {
+                        return portal.id === portalId && 
+                               Math.abs(portal.position.x - change.position.x) < 0.1 &&
+                               Math.abs(portal.position.y - change.position.y) < 0.1 &&
+                               Math.abs(portal.position.z - change.position.z) < 0.1;
+                    }
+                );
+                
+                if (duplicateAtPosition !== -1) {
+                    console.log(`Found duplicate portal at position, updating instead of adding new`);
+                    worldData.portals[duplicateAtPosition] = portalData;
+                } else {
+                    // Add new portal
+                    console.log(`Adding new portal ${portalId} with instance ${instanceIndex} to portals array`);
+                    worldData.portals.push(portalData);
+                }
+            }
+            
+            console.log("Portals in world data after update:", worldData.portals.length);
+            
+            return true;
+        } catch (error) {
+            console.error('Error handling portal transform:', error);
+            return false;
+        }
     }
 } 

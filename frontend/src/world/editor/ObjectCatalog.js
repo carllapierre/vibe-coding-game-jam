@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ObjectRegistry } from '../../registries/ObjectRegistry.js';
 import { SpawnerRegistry } from '../../registries/SpawnerRegistry.js';
+import { PortalRegistry } from '../../registries/PortalRegistry.js';
 import { getPositionInFrontOfCamera } from '../../utils/SceneUtils.js';
 import { showFeedback } from '../../utils/UIUtils.js';
 
@@ -12,12 +13,14 @@ export class ObjectCatalog {
     /**
      * @param {Function} placeObjectCallback - Callback to place objects in the world
      * @param {Function} placeSpawnerCallback - Callback to place spawners in the world
+     * @param {Function} placePortalCallback - Callback to place portals in the world
      * @param {THREE.Camera} camera - Three.js camera for placing objects
      * @param {HTMLElement} feedbackElement - Element for feedback messages
      */
-    constructor(placeObjectCallback, placeSpawnerCallback, camera, feedbackElement) {
+    constructor(placeObjectCallback, placeSpawnerCallback, placePortalCallback, camera, feedbackElement) {
         this.placeObjectCallback = placeObjectCallback;
         this.placeSpawnerCallback = placeSpawnerCallback;
+        this.placePortalCallback = placePortalCallback;
         this.camera = camera;
         this.feedbackElement = feedbackElement;
         
@@ -178,6 +181,23 @@ export class ObjectCatalog {
             this.createObjectItem(item);
         });
         
+        // Add section title for portals
+        const portalsTitle = document.createElement('div');
+        portalsTitle.style.cssText = `
+            font-size: 14px;
+            font-weight: bold;
+            padding: 5px;
+            margin: 15px 0 5px 0;
+            border-bottom: 1px solid #555;
+        `;
+        portalsTitle.textContent = 'Portals';
+        this.itemsContainer.appendChild(portalsTitle);
+        
+        // Add each portal from the registry
+        PortalRegistry.items.forEach(item => {
+            this.createPortalItem(item);
+        });
+        
         // Add section title for spawners
         const spawnersTitle = document.createElement('div');
         spawnersTitle.style.cssText = `
@@ -286,6 +306,119 @@ export class ObjectCatalog {
         // Add click event for item placement
         itemElement.addEventListener('click', () => {
             this.placeObject(item.id);
+        });
+        
+        // Hover effect
+        itemElement.addEventListener('mouseenter', () => {
+            itemElement.style.background = 'rgba(80, 80, 80, 0.8)';
+        });
+        
+        itemElement.addEventListener('mouseleave', () => {
+            itemElement.style.background = 'rgba(60, 60, 60, 0.8)';
+        });
+        
+        this.itemsContainer.appendChild(itemElement);
+    }
+    
+    /**
+     * Create an item element for a portal
+     * @param {Object} item - Portal data from registry
+     */
+    createPortalItem(item) {
+        const itemElement = document.createElement('div');
+        itemElement.classList.add('catalog-item');
+        itemElement.dataset.id = item.id;
+        itemElement.dataset.type = 'portal';
+        itemElement.style.cssText = `
+            background: rgba(60, 60, 60, 0.8);
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: background 0.2s;
+            margin-bottom: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        `;
+        
+        // Portal preview container
+        const previewContainer = document.createElement('div');
+        previewContainer.style.cssText = `
+            width: 100%;
+            height: 100px;
+            background: rgba(30, 30, 30, 0.5);
+            margin-bottom: 8px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        `;
+        
+        // Create a simple preview for the portal
+        const portalPreview = document.createElement('div');
+        portalPreview.style.cssText = `
+            width: 60px;
+            height: 80px;
+            background: #${item.color ? item.color.toString(16).padStart(6, '0') : '3366ff'};
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px #${item.color ? item.color.toString(16).padStart(6, '0') : '3366ff'};
+        `;
+        
+        // Portal icon
+        const portalIcon = document.createElement('div');
+        portalIcon.style.cssText = `
+            color: #ffffff;
+            font-size: 32px;
+            text-align: center;
+        `;
+        portalIcon.textContent = '🌀';
+        
+        portalPreview.appendChild(portalIcon);
+        previewContainer.appendChild(portalPreview);
+        
+        // Item name
+        const nameElement = document.createElement('div');
+        nameElement.textContent = item.id
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+        nameElement.style.cssText = `
+            font-size: 12px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        `;
+        
+        // Item description
+        const descElement = document.createElement('div');
+        descElement.textContent = item.description || 'Portal';
+        descElement.style.cssText = `
+            font-size: 10px;
+            color: #aaa;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            margin-top: 2px;
+        `;
+        
+        itemElement.appendChild(previewContainer);
+        itemElement.appendChild(nameElement);
+        itemElement.appendChild(descElement);
+        
+        // Add click event for portal placement
+        itemElement.addEventListener('click', () => {
+            this.placePortal(item.id);
         });
         
         // Hover effect
@@ -496,6 +629,35 @@ export class ObjectCatalog {
             );
         } catch (error) {
             console.error(`Error placing spawner ${spawnerId}:`, error);
+            
+            showFeedback(
+                this.feedbackElement,
+                `Error: ${error.message}`,
+                'rgba(255, 0, 0, 0.7)'
+            );
+        }
+    }
+    
+    /**
+     * Place a portal in the world
+     * @param {string} portalId - ID of the portal to place
+     */
+    placePortal(portalId) {
+        try {
+            // Get position in front of camera
+            const position = getPositionInFrontOfCamera(this.camera);
+            
+            // Call the callback with the portal ID and position
+            this.placePortalCallback(portalId, position);
+            
+            // Show feedback
+            showFeedback(
+                this.feedbackElement,
+                `Placed ${portalId} portal`,
+                'rgba(0, 255, 0, 0.7)'
+            );
+        } catch (error) {
+            console.error(`Error placing portal ${portalId}:`, error);
             
             showFeedback(
                 this.feedbackElement,

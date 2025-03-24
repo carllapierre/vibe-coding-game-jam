@@ -189,6 +189,7 @@ export class Character {
     setupEventListeners() {
 
         // only if in development mode
+        console.log(api);
         if (api.environment === 'development') {
             document.addEventListener('keydown', (event) => {
                 if (!this.enabled) return;
@@ -573,8 +574,76 @@ export class Character {
         
         if (!this.enabled || !this.controls.isLocked) return;
 
+        // Check for portal collisions
+        this.checkPortalCollisions();
+        
         this.updateMovement();
         this.updateHandAndPreviewModel();
+    }
+
+    /**
+     * Check if the player is colliding with any portals
+     */
+    checkPortalCollisions() {
+        // Create a sphere representing the player's position
+        const playerPosition = this.camera.position.clone();
+        const playerSphere = new THREE.Sphere(playerPosition, this.playerRadius);
+        
+        // Find all portal objects in the scene
+        const portals = [];
+        this.scene.traverse(object => {
+            if (object.userData && object.userData.type === 'portal') {
+                portals.push(object);
+            }
+        });
+        
+        // Check collision with each portal
+        for (const portal of portals) {
+            // Skip if the portal has no collider
+            if (!portal.collider) continue;
+            
+            // Get portal world position (account for parent transformations)
+            const portalPosition = new THREE.Vector3();
+            const colliderWorldPosition = new THREE.Vector3();
+            
+            portal.getWorldPosition(portalPosition);
+            portal.collider.getWorldPosition(colliderWorldPosition);
+            
+            // Create a box for the portal's collider
+            const colliderSize = new THREE.Vector3(1.8, 2.8, 1); // Same as in PortalObject.createCollider
+            const halfSize = colliderSize.clone().multiplyScalar(0.5);
+            
+            // Create a box3 for collision detection
+            const box = new THREE.Box3().setFromCenterAndSize(
+                colliderWorldPosition,
+                colliderSize
+            );
+            
+            // Check for collision
+            if (box.intersectsSphere(playerSphere)) {
+                console.log(`Player entered portal: ${portal.userData.id}`);
+                
+                // Call portal's onPlayerEnter
+                if (typeof portal.onPlayerEnter === 'function') {
+                    portal.onPlayerEnter();
+                }
+                
+                // Execute the onEnter callback directly if no method available
+                if (portal.portalData && typeof portal.portalData.onEnter === 'function') {
+                    portal.portalData.onEnter();
+                }
+                
+                // Also check collider userData for onEnter function
+                if (portal.collider && portal.collider.userData && 
+                    typeof portal.collider.userData.onEnter === 'function') {
+                    portal.collider.userData.onEnter();
+                }
+                
+                // Add a slight delay before checking again to prevent multiple triggers
+                // for the same portal
+                portal.lastTriggered = Date.now();
+            }
+        }
     }
 
     updateMovement() {

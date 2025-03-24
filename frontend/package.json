@@ -10,7 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.162.0"
+    "three": "^0.162.0",
+    "troika-three-text": "^0.52.3"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",

@@ -5,7 +5,7 @@
 // API configuration - static deployment mode
 export const api = {
     // Empty host for production (static deployment)
-    host: '',
+    host: 'http://127.0.0.1:5000',
     environment: 'development'
 };
 

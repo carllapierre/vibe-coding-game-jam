@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ObjectRegistry } from '../../registries/ObjectRegistry.js';
+import { PortalRegistry } from '../../registries/PortalRegistry.js';
+import { PortalObject } from '../../portals/PortalObject.js';
 import worldManagerService from '../../services/WorldManagerService.js';
 import { ChangeManager } from './ChangeManager.js';
 import { TransformManager } from './TransformManager.js';
@@ -186,6 +188,7 @@ export class EditorCore {
         this.objectCatalog = new ObjectCatalog(
             this.placeObjectInWorld.bind(this), 
             this.placeSpawnerInWorld.bind(this),
+            this.placePortalInWorld.bind(this),
             this.camera,
             this.saveFeedback
         );
@@ -559,32 +562,120 @@ export class EditorCore {
     }
     
     /**
-     * Save all pending changes
+     * Place a portal in the world
+     * @param {string} portalId - Portal ID from registry
+     * @param {THREE.Vector3} position - Position to place the portal
      */
-    async saveAllChanges() {
-        return this.changeManager.saveAllChanges(this.worldManager);
+    placePortalInWorld(portalId, position) {
+        try {
+            console.log(`Placing portal ${portalId} at position:`, position);
+            
+            // Generate a unique instance index - use current timestamp
+            const instanceIndex = Date.now();
+            
+            // Create portal object with explicit instance index
+            const portal = new PortalObject(portalId, position, instanceIndex);
+            console.log(`Created portal object with instanceIndex ${instanceIndex}:`, portal);
+            
+            // Add to scene
+            this.scene.add(portal);
+            
+            // Select with transform controls
+            this.transformManager.transformControls.attach(portal);
+            
+            // Record creation change
+            this.changeManager.recordChange(portal);
+            
+            // Show feedback
+            showFeedback(
+                this.saveFeedback,
+                `Added ${portalId} portal - Press K to save`,
+                'rgba(0, 255, 0, 0.7)'
+            );
+            
+            // Return the created portal
+            return portal;
+        } catch (error) {
+            console.error('Error placing portal:', error);
+            
+            showFeedback(
+                this.saveFeedback,
+                `Error: ${error.message}`,
+                'rgba(255, 0, 0, 0.7)'
+            );
+            return null;
+        }
     }
     
     /**
-     * Update editor state (called every frame)
+     * Save all changes to the world
      */
-    update() {
-        if (!this.isDebugMode) return;
-
+    async saveAllChanges() {
+        try {
+            // If we have a world manager, save all changes
+            if (this.worldManager) {
+                console.log("Starting to save all changes...");
+                
+                // Save object changes
+                await this.changeManager.saveAllChanges(this.worldManager);
+                
+                // Save world data
+                const promises = [];
+                
+                // Save objects
+                if (this.worldManager.saveObjects) {
+                    console.log("Adding saveObjects to save queue");
+                    promises.push(this.worldManager.saveObjects());
+                }
+                
+                // Save spawners
+                if (this.worldManager.saveSpawners) {
+                    console.log("Adding saveSpawners to save queue");
+                    promises.push(this.worldManager.saveSpawners());
+                }
+                
+                // Save portals
+                if (this.worldManager.savePortals) {
+                    console.log("Adding savePortals to save queue");
+                    promises.push(this.worldManager.savePortals());
+                } else {
+                    console.warn("savePortals method not found on worldManager");
+                }
+                
+                // Wait for all saves to complete
+                console.log(`Executing ${promises.length} save operations...`);
+                await Promise.all(promises);
+                console.log("All save operations completed successfully");
+            }
+        } catch (error) {
+            console.error('Error saving changes:', error);
+        }
+    }
+    
+    /**
+     * Update the editor components
+     * @param {number} deltaTime - Time since last update
+     */
+    update(deltaTime) {
         // Update orbit controls
-        this.orbitControls.update();
-
-        // Only handle movement if we're not dragging an object
-        if (!this.transformManager.transformControls.dragging) {
-            // Handle keyboard movement
-            const moveSpeed = this.keys.shift ? this.moveSpeed * 2 : this.moveSpeed;
+        if (this.isDebugMode && this.orbitControls.enabled) {
+            this.orbitControls.update();
+        }
+        
+        // Update camera position based on keys
+        if (this.isDebugMode) {
+            this.updateCameraPosition(deltaTime);
+        }
+        
+        // Update spawners and portals
+        if (this.worldManager) {
+            // Call the worldManagerService's updateSpawners method directly
+            worldManagerService.updateSpawners(this.character);
             
-            if (this.keys.w) this.camera.position.z -= moveSpeed;
-            if (this.keys.s) this.camera.position.z += moveSpeed;
-            if (this.keys.a) this.camera.position.x -= moveSpeed;
-            if (this.keys.d) this.camera.position.x += moveSpeed;
-            if (this.keys.q) this.camera.position.y -= moveSpeed;
-            if (this.keys.e) this.camera.position.y += moveSpeed;
+            // Update portals
+            if (this.worldManager.updatePortals && typeof this.worldManager.updatePortals === 'function') {
+                this.worldManager.updatePortals(deltaTime);
+            }
         }
     }
     
@@ -594,6 +685,15 @@ export class EditorCore {
      */
     setWorldManager(worldManager) {
         this.worldManager = worldManager;
+        
+        // Initialize required properties if they don't exist
+        if (!this.worldManager.initPromises) {
+            this.worldManager.initPromises = [];
+        }
+        
+        if (!this.worldManager.saveTypes) {
+            this.worldManager.saveTypes = [];
+        }
         
         // Ensure the worldManager has all required methods for editor functionality
         this.initializeWorldManagerMethods();
@@ -763,6 +863,216 @@ export class EditorCore {
                 }
             };
         }
+
+        // Add portals from world data
+        const addPortals = async () => {
+            try {
+                console.log("Starting to load portals from world data...");
+                const worldData = await worldManagerService.getWorldData();
+                
+                console.log("World data keys:", Object.keys(worldData));
+                
+                if (!worldData) {
+                    console.warn("No world data found for loading portals");
+                    return;
+                }
+                
+                if (!worldData.portals) {
+                    console.log("No portals array in world data");
+                    return;
+                }
+                
+                if (!Array.isArray(worldData.portals)) {
+                    console.warn("Portals property exists but is not an array:", worldData.portals);
+                    return;
+                }
+                
+                if (worldData.portals.length === 0) {
+                    console.log("Portals array is empty - no portals to load");
+                    return;
+                }
+                
+                console.log(`Found ${worldData.portals.length} portals in world data:`, worldData.portals);
+                
+                // First, remove any existing portals from the scene to prevent duplicates
+                const existingPortals = [];
+                this.scene.traverse(obj => {
+                    if (obj.userData && obj.userData.type === 'portal') {
+                        existingPortals.push(obj);
+                    }
+                });
+                
+                if (existingPortals.length > 0) {
+                    console.log(`Removing ${existingPortals.length} existing portals before loading`);
+                    existingPortals.forEach(portal => {
+                        // Dispose resources if possible
+                        if (typeof portal.dispose === 'function') {
+                            portal.dispose();
+                        }
+                        this.scene.remove(portal);
+                    });
+                }
+                
+                // Add each portal to the scene
+                worldData.portals.forEach((portalData, index) => {
+                    try {
+                        console.log(`Loading portal ${index + 1}/${worldData.portals.length}: ${portalData.id}`);
+                        
+                        // Skip portals with invalid data
+                        if (!portalData.id || !portalData.position) {
+                            console.warn(`Portal ${index} has invalid data:`, portalData);
+                            return;
+                        }
+                        
+                        // Create the portal
+                        const portal = new PortalObject(portalData.id, new THREE.Vector3(
+                            portalData.position.x,
+                            portalData.position.y,
+                            portalData.position.z
+                        ));
+                        
+                        // Make sure the portal has the correct instanceIndex from the saved data
+                        if (portalData.instanceIndex) {
+                            portal.userData.instanceIndex = portalData.instanceIndex;
+                        }
+                        
+                        // Set rotation
+                        if (portalData.rotation) {
+                            portal.rotation.set(
+                                portalData.rotation.x,
+                                portalData.rotation.y,
+                                portalData.rotation.z
+                            );
+                        }
+                        
+                        // Set scale
+                        if (portalData.scale) {
+                            portal.scale.set(
+                                portalData.scale.x,
+                                portalData.scale.y,
+                                portalData.scale.z
+                            );
+                        }
+                        
+                        // Update label if custom label exists
+                        if (portalData.label) {
+                            portal.updateLabel(portalData.label);
+                        }
+                        
+                        // Add to scene
+                        this.scene.add(portal);
+                        
+                        console.log(`Added portal ${portalData.id} to scene`);
+                        
+                    } catch (error) {
+                        console.error(`Error loading portal ${portalData.id}:`, error);
+                    }
+                });
+                
+                console.log(`Successfully loaded ${worldData.portals.length} portals from world data`);
+                
+            } catch (error) {
+                console.error('Error loading portals:', error);
+            }
+        };
+        
+        // Add method to save portals
+        this.worldManager.savePortals = async () => {
+            try {
+                console.log("Starting savePortals process...");
+                
+                // Get current world data
+                const worldData = await worldManagerService.getWorldData();
+                console.log("Current world data structure:", Object.keys(worldData));
+                
+                // Ensure the portals array exists
+                if (!worldData.portals) {
+                    console.log("Creating portals array in world data");
+                    worldData.portals = [];
+                }
+                
+                // Find all portals in the scene
+                const portalObjects = [];
+                this.scene.traverse(object => {
+                    if (object.userData && object.userData.type === 'portal') {
+                        console.log(`Found portal in scene: ${object.userData.id} with instance ${object.userData.instanceIndex}`);
+                        portalObjects.push(object);
+                    }
+                });
+                
+                console.log(`Found ${portalObjects.length} portals in the scene`);
+                
+                // Reset portals array
+                worldData.portals = [];
+                
+                // Add each portal to world data
+                portalObjects.forEach(portal => {
+                    const portalData = {
+                        id: portal.userData.id,
+                        instanceIndex: portal.userData.instanceIndex,
+                        position: {
+                            x: portal.position.x,
+                            y: portal.position.y,
+                            z: portal.position.z
+                        },
+                        rotation: {
+                            x: portal.rotation.x,
+                            y: portal.rotation.y,
+                            z: portal.rotation.z
+                        },
+                        scale: {
+                            x: portal.scale.x,
+                            y: portal.scale.y,
+                            z: portal.scale.z
+                        },
+                        label: portal.label ? portal.label.text : null
+                    };
+                    
+                    console.log(`Adding portal to world data:`, portalData);
+                    worldData.portals.push(portalData);
+                });
+                
+                console.log(`Prepared ${worldData.portals.length} portals for saving`);
+                
+                // Log the structure of the world data before saving
+                console.log("World data structure before saving:", {
+                    hasPortals: !!worldData.portals,
+                    portalCount: worldData.portals ? worldData.portals.length : 0,
+                    topLevelKeys: Object.keys(worldData)
+                });
+                
+                // Save world data
+                const saveResult = await worldManagerService.saveWorldData(worldData);
+                console.log(`Saved ${worldData.portals.length} portals to world data, result:`, saveResult);
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving portals:', error);
+                return false;
+            }
+        };
+        
+        // Add method to update portals
+        this.worldManager.updatePortals = (deltaTime) => {
+            // Update all portal animations
+            this.scene.traverse(object => {
+                if (object instanceof PortalObject) {
+                    object.update(deltaTime);
+                }
+            });
+        };
+        
+        // Add portals to initial load chain
+        if (!this.worldManager.initPromises) {
+            this.worldManager.initPromises = [];
+        }
+        this.worldManager.initPromises.push(addPortals());
+        
+        // Add portals to save chain
+        if (!this.worldManager.saveTypes) {
+            this.worldManager.saveTypes = [];
+        }
+        this.worldManager.saveTypes.push('portals');
     }
     
     /**
@@ -781,5 +1091,26 @@ export class EditorCore {
         
         // Clean up catalog
         this.objectCatalog.dispose();
+    }
+
+    /**
+     * Update camera position based on keyboard input
+     * @param {number} deltaTime - Time since last update
+     */
+    updateCameraPosition(deltaTime) {
+        // Only handle movement if we're not dragging an object
+        if (this.transformManager.transformControls.dragging) {
+            return;
+        }
+        
+        // Handle keyboard movement
+        const moveSpeed = this.keys.shift ? this.moveSpeed * 2 : this.moveSpeed;
+        
+        if (this.keys.w) this.camera.position.z -= moveSpeed;
+        if (this.keys.s) this.camera.position.z += moveSpeed;
+        if (this.keys.a) this.camera.position.x -= moveSpeed;
+        if (this.keys.d) this.camera.position.x += moveSpeed;
+        if (this.keys.q) this.camera.position.y -= moveSpeed;
+        if (this.keys.e) this.camera.position.y += moveSpeed;
     }
 } 
