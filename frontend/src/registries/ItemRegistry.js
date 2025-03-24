@@ -76,7 +76,7 @@ export class ItemRegistry extends Registry {
         { id: 'whipped-cream', model: 'whipped-cream.glb', scale: 0.5 },
         { id: 'honey', model: 'honey.glb', scale: 0.5 },
         { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5 },
-
+        { id: 'cake', model: 'cake.glb', scale: 1 },
         // Beverages
         { id: 'wine-red', model: 'wine-red.glb', scale: 0.8 },
         { id: 'wine-white', model: 'wine-white.glb', scale: 0.8 },

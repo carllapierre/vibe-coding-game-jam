@@ -49442,13 +49442,22 @@
                 "y": 3.8679641565806646,
                 "z": -14.754404081689053
             }
+        },
+        {
+            "id": "rare-1",
+            "instanceIndex": 92161,
+            "position": {
+                "x": 23.48168244632037,
+                "y": 7.445088751538152,
+                "z": -25.773119188366383
+            }
         }
     ],
     "portals": [
         {
             "id": "redirect-vibeverse",
             "instanceIndex": 1742778971205,
-            "label": "Vibeverse",
+            "label": "Metaverse Delta",
             "position": {
                 "x": 12.388319060265609,
                 "y": 1.528362262161493,
@@ -49468,6 +49477,7 @@
         {
             "id": "redirect-random-game",
             "instanceIndex": 1742779107436,
+            "label": "Vibeverse",
             "position": {
                 "x": 2.182471005140804,
                 "y": 1.658245502737416,
