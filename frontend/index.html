@@ -24,10 +24,37 @@
             pointer-events: none;
             user-select: none;
         }
+        #dev-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: 'system-ui', sans-serif;
+            font-size: 14px;
+            z-index: 10000;
+            max-width: 250px;
+        }
+        #dev-info a {
+            color: #1DA1F2;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        #dev-info a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div id="crosshair">+</div>
+    <div id="dev-info">
+        🎮 Welcome to Food Vibers! <br>
+        Game in development <br>
+        Multiplayer deathmatch coming soon! <br>
+        Follow <a href="https://x.com/dev_clap" target="_blank">@dev_clap</a> for updates
+    </div>
     <script type="module" src="src/main.js"></script>
     <a target="_blank" href="https://jam.pieter.com" style="font-family: 'system-ui', sans-serif; position: fixed; bottom: -1px; right: -1px; padding: 7px; font-size: 14px; font-weight: bold; background: #fff; color: #000; text-decoration: none; z-index: 10; border-top-left-radius: 12px; z-index: 10000; border: 1px solid #fff;">🕹️ Vibe Jam 2025</a>
 </body>
