@@ -189,17 +189,14 @@ export class Character {
     setupEventListeners() {
 
         // only if in development mode
-        console.log(api);
-        if (api.environment === 'development') {
-            document.addEventListener('keydown', (event) => {
-                if (!this.enabled) return;
-                // Don't handle character controls if Shift+D is pressed (debug mode toggle)
-                if (event.key === 'D' && event.shiftKey) {
-                    return;
-                }
-                this.handleKeyDown(event);
-            });
-        }
+        document.addEventListener('keydown', (event) => {
+            if (!this.enabled) return;
+            // Don't handle character controls if Shift+D is pressed (debug mode toggle)
+            if (event.key === 'D' && event.shiftKey) {
+                return;
+            }
+            this.handleKeyDown(event);
+        });
         document.addEventListener('keyup', (event) => {
             if (!this.enabled) return;
             this.handleKeyUp(event);

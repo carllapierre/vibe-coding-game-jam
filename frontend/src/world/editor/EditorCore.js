@@ -10,7 +10,7 @@ import { TransformManager } from './TransformManager.js';
 import { SpawnerManager } from './SpawnerManager.js';
 import { ObjectCatalog } from './ObjectCatalog.js';
 import { showFeedback } from '../../utils/UIUtils.js';
-
+import { api } from '../../config.js';
 /**
  * Main world editor class that integrates all editor components
  */
@@ -210,9 +210,11 @@ export class EditorCore {
                 this.handleKeyDown(event);
             }
 
-            // Toggle debug mode with Shift+D
-            if (event.shiftKey && event.key.toLowerCase() === 'd') {
-                this.toggleDebugMode();
+            if (api.environment !== 'production') { 
+                // Toggle debug mode with Shift+D
+                if (event.shiftKey && event.key.toLowerCase() === 'd') {
+                    this.toggleDebugMode();
+                }
             }
         });
 
