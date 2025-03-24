@@ -318,8 +318,6 @@ export class WorldManager {
             await this.loadWorld();
         }
 
-        console.log('World data:', this.worldData);
-
         // Initialize objects array if it doesn't exist
         if (!this.worldData.objects) {
             console.warn('No objects array found in world data, initializing empty array');
