@@ -15,9 +15,6 @@ import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
 import { api } from './config.js';
 
-// Log current configuration
-console.log('Current configuration:', api);
-
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -132,13 +129,10 @@ async function initializeWorld() {
     // Load all objects from the world
     await worldManager.loadObjects();
     collidableObjects = worldManager.getCollidableObjects();
-    
     // Update character's collidable objects reference
     character.collidableObjects = collidableObjects;
-    
     // Update FoodProjectile's static collidable objects
     FoodProjectile.updateCollidableObjects(collidableObjects);
-    
     // Initialize spawners after objects are loaded
     await worldManager.initializeSpawners(character);
 }
