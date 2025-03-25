@@ -1,7 +1,7 @@
 {
-  "name": "threejs-fps-sandbox",
+  "name": "food-vibers",
   "version": "1.0.0",
-  "description": "A Three.js FPS sandbox starter project",
+  "description": "Multiplayer food fight deathmatch!",
   "main": "index.js",
   "scripts": {
     "copy-map": "node build.js",
