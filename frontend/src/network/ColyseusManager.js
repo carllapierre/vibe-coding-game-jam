@@ -140,6 +140,39 @@ export class ColyseusManager extends EventEmitter {
       console.log('Left Colyseus room:', code);
       this.emit('disconnected');
     });
+    
+    // Set up message handlers for custom events
+    this.setupMessageHandlers();
+  }
+  
+  /**
+   * Set up message handlers for custom events
+   * like projectiles, damage, etc.
+   */
+  setupMessageHandlers() {
+    if (!this.room) return;
+    
+    // Listen for projectile creation events
+    this.room.onMessage('projectile', (data) => {
+      console.log(`Received projectile data from server:`, data.itemType);
+      // Forward to listeners with playerId added
+      this.emit('projectileCreated', {
+        ...data,
+        playerId: data.playerId // Ensure playerId is passed
+      });
+    });
+    
+    // Listen for damage events
+    this.room.onMessage('damage', (data) => {
+      console.log(`Received damage event from server:`, data);
+      this.emit('playerDamaged', data);
+    });
+    
+    // Listen for player respawn events
+    this.room.onMessage('playerRespawned', (data) => {
+      console.log(`Player respawned:`, data);
+      this.emit('playerRespawned', data);
+    });
   }
   
   /**
@@ -232,6 +265,16 @@ export class ColyseusManager extends EventEmitter {
   }
   
   /**
+   * Send projectile data to the server
+   * @param {Object} projectileData - Projectile data
+   */
+  sendProjectile(projectileData) {
+    if (!this.room) return;
+    
+    this.room.send('projectile', projectileData);
+  }
+  
+  /**
    * Send damage event to the server
    * @param {string} targetId - Target player's session ID
    * @param {number} amount - Amount of damage
@@ -239,6 +282,7 @@ export class ColyseusManager extends EventEmitter {
   sendDamage(targetId, amount) {
     if (!this.room) return;
     
+    console.log(`Sending damage to server: target=${targetId}, amount=${amount}`);
     this.room.send('damage', { targetId, amount });
   }
   

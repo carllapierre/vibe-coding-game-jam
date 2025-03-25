@@ -6,7 +6,7 @@ import { api } from '../config.js';
 
 // Health Manager class for handling character health
 class HealthManager {
-    constructor(maxHealth = 1000) {
+    constructor(maxHealth = 100) {
         this.maxHealth = maxHealth;
         this.currentHealth = maxHealth;
         this.healthChangeCallbacks = [];
@@ -70,7 +70,7 @@ export class Character {
         this.enabled = true;
         
         // Initialize health manager
-        this.healthManager = new HealthManager(1000);
+        this.healthManager = new HealthManager(100);
         
         // Movement variables
         this.moveSpeed = 0.15;
@@ -327,9 +327,11 @@ export class Character {
         const direction = new THREE.Vector3();
         this.camera.getWorldDirection(direction);
         
+        // Create local projectile
+        const position = this.camera.position.clone().add(direction.clone().multiplyScalar(2));
         const projectile = new FoodProjectile({
             scene: this.scene,
-            position: this.camera.position.clone().add(direction.multiplyScalar(2)),
+            position: position,
             direction: direction,
             path: itemConfig.modelPath,
             scale: itemConfig.scale,
@@ -340,6 +342,30 @@ export class Character {
         });
         
         FoodProjectile.registerProjectile(projectile);
+
+        // Send projectile info over network if NetworkManager is available and server is ready
+        if (window.networkManager && window.networkManager.isConnected && 
+            window.networkManager.isServerReadyForProjectiles) {
+            try {
+                window.networkManager.sendProjectile({
+                    itemType: itemConfig.id || 'tomato',
+                    x: position.x,
+                    y: position.y,
+                    z: position.z,
+                    dirX: direction.x,
+                    dirY: direction.y,
+                    dirZ: direction.z,
+                    speed: 0.5,
+                    scale: itemConfig.scale || 1,
+                    gravity: 0.01,
+                    arcHeight: 0.2,
+                    lifetime: 5000
+                });
+            } catch (error) {
+                console.error('Error sending projectile over network:', error);
+                // Don't let network errors break the local projectile throw
+            }
+        }
 
         this.isThrowAnimating = true;
         this.throwAnimationStartTime = Date.now();

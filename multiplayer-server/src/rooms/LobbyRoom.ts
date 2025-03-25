@@ -7,6 +7,15 @@ export class LobbyRoom extends Room<LobbyState> {
   
   // Track client IDs to allow multiple connections from same browser
   clientIds = new Map<string, string>();
+  
+  // Define spawn points for player respawns
+  spawnPoints = [
+    { x: 0, y: 2, z: 0 },
+    { x: 10, y: 2, z: 10 },
+    { x: -10, y: 2, z: -10 },
+    { x: 10, y: 2, z: -10 },
+    { x: -10, y: 2, z: 10 }
+  ];
 
   onCreate (options: any) {
     console.log("LobbyRoom created!", this.roomId);
@@ -25,21 +34,65 @@ export class LobbyRoom extends Room<LobbyState> {
     });
     
     this.onMessage("damage", (client, message) => {
-      const targetPlayer = this.state.players.get(message.targetId);
-      if (targetPlayer) {
-        targetPlayer.health -= message.amount;
-        
-        // If player health is depleted
-        if (targetPlayer.health <= 0) {
-          targetPlayer.health = 100; // Respawn with full health
-          
-          // Optionally increment score for the attacker
-          const attackerPlayer = this.state.players.get(client.sessionId);
-          if (attackerPlayer) {
-            attackerPlayer.score += 1;
-          }
-        }
+      const { targetId, amount } = message;
+      const targetPlayer = this.state.players.get(targetId);
+      
+      if (!targetPlayer) {
+        console.log(`Target player ${targetId} not found for damage`);
+        return;
       }
+      
+      console.log(`Processing damage: ${client.sessionId} -> ${targetId} for ${amount} damage`);
+      
+      // The client who reported damage is the TARGET (the one being hit)
+      // targetId is the SOURCE (the one who threw the projectile)
+      
+      // Update the target player's health (that's the client who sent the message)
+      // This reverses the source/target relationship to match the projectile hit flow
+      const hitPlayer = this.state.players.get(client.sessionId);
+      
+      if (!hitPlayer) {
+        console.log(`Hit player ${client.sessionId} not found`);
+        return;
+      }
+      
+      // Update target player's health
+      hitPlayer.health = Math.max(0, hitPlayer.health - amount);
+      console.log(`${client.sessionId}'s health reduced to ${hitPlayer.health}`);
+      
+      // If player health is depleted
+      if (hitPlayer.health <= 0) {
+        // Increment score for the source player (who threw the projectile)
+        const sourcePlayer = this.state.players.get(targetId);
+        if (sourcePlayer) {
+          sourcePlayer.score += 10; // 10 points for a kill
+          console.log(`${targetId}'s score increased to ${sourcePlayer.score}`);
+        }
+        
+        // Schedule respawn
+        this.respawnPlayer(hitPlayer);
+      }
+      
+      // Broadcast damage event to all clients
+      this.broadcast("damage", {
+        targetId: client.sessionId,  // The player who was hit (sent the message)
+        sourceId: targetId,          // The player who threw the projectile
+        amount: amount,
+        remainingHealth: hitPlayer.health
+      });
+    });
+    
+    this.onMessage("projectile", (client, data) => {
+      console.log(`Received projectile from ${client.sessionId}:`, data.itemType);
+      
+      // Add the player ID to the projectile data
+      const projectileData = {
+        ...data,
+        playerId: client.sessionId
+      };
+      
+      // Broadcast to all clients except the sender
+      this.broadcast("projectile", projectileData, { except: client });
     });
     
     this.onMessage("equip", (client, message) => {
@@ -48,6 +101,32 @@ export class LobbyRoom extends Room<LobbyState> {
         player.equippedItem = message.itemId;
       }
     });
+  }
+
+  /**
+   * Respawn a player after they die
+   * @param player The player to respawn
+   */
+  respawnPlayer(player: Player) {
+    // Wait 3 seconds before respawning
+    setTimeout(() => {
+      // Reset health
+      player.health = 100;
+      
+      // Set to a random spawn position
+      const spawn = this.spawnPoints[Math.floor(Math.random() * this.spawnPoints.length)];
+      
+      player.x = spawn.x;
+      player.y = spawn.y;
+      player.z = spawn.z;
+      
+      // Notify about respawn
+      this.broadcast("playerRespawned", {
+        playerId: player.id
+      });
+      
+      console.log(`Player ${player.id} respawned at`, spawn);
+    }, 3000);
   }
 
   onJoin (client: Client, options: any) {

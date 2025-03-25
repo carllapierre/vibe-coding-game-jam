@@ -207,6 +207,33 @@ inventory.onSelectionChange = (selectedIndex, selectedItem) => {
 // Reference to store the network manager
 let networkManager = null;
 
+// Call this from the initializeMultiplayer function
+async function initializeMultiplayer(character) {
+  try {
+    console.log('Initializing multiplayer...');
+    
+    if (!ENABLE_MULTIPLAYER) {
+      console.log('Multiplayer is disabled. Set ENABLE_MULTIPLAYER = true to enable.');
+      return;
+    }
+    
+    if (!networkManager) {
+      networkManager = new NetworkManager(scene, character);
+      
+      // Try to connect with a random name
+      const randomName = `Player-${Math.floor(Math.random() * 10000)}`;
+      
+      await networkManager.initialize(randomName, 'character-1');
+      
+      console.log('Multiplayer initialized!');
+      
+      // The server now supports projectiles, so no warning needed
+    }
+  } catch (error) {
+    console.error('Failed to initialize multiplayer:', error);
+  }
+}
+
 // Load the world after all registries are initialized
 async function initializeWorld() {
     try {
@@ -226,10 +253,7 @@ async function initializeWorld() {
         if (ENABLE_MULTIPLAYER) {
             console.log('Initializing multiplayer...');
             try {
-                networkManager = new NetworkManager(scene, character);
-                const playerName = `Player_${Math.floor(Math.random() * 1000)}`;
-                await networkManager.initialize(playerName, 'character-1');
-                console.log('Multiplayer initialized successfully');
+                await initializeMultiplayer(character);
             } catch (error) {
                 console.error('Failed to initialize multiplayer:', error);
                 console.warn('Continuing in single-player mode due to multiplayer error');
