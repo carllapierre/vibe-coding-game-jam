@@ -1,6 +1,6 @@
 // PortalEntity.js
 import * as THREE from 'three';
-import { Text } from 'troika-three-text';
+// import { Text } from 'troika-three-text';
 import { PortalRegistry } from '../registries/PortalRegistry.js';
 
 export class PortalObject extends THREE.Group {
@@ -91,17 +91,17 @@ export class PortalObject extends THREE.Group {
      * @param {string} labelText - Text to display
      */
     createLabel(labelText) {
-        // Create text using troika-three-text
-        this.label = new Text();
-        this.label.text = labelText;
-        this.label.fontSize = 0.2;
-        this.label.color = 0xffffff;
-        this.label.anchorX = 'center';
-        this.label.anchorY = 'top';
-        this.label.position.set(0, 1, 0.2);
-        this.label.sync();
+        // // Create text using troika-three-text
+        // this.label = new Text();
+        // this.label.text = labelText;
+        // this.label.fontSize = 0.2;
+        // this.label.color = 0xffffff;
+        // this.label.anchorX = 'center';
+        // this.label.anchorY = 'top';
+        // this.label.position.set(0, 1, 0.2);
+        // this.label.sync();
         
-        this.add(this.label);
+        // this.add(this.label);
     }
     
     /**

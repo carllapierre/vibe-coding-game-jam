@@ -221,44 +221,44 @@ export class Character {
             this.controls.lock();
         });
         
-        // Add pointer lock change event to handle when user exits pointer lock
-        document.addEventListener('pointerlockchange', () => {
-            if (!document.pointerLockElement && this.enabled) {
-                // Don't show the lock message if loading screen is visible
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) return;
+        // // Add pointer lock change event to handle when user exits pointer lock
+        // document.addEventListener('pointerlockchange', () => {
+        //     if (!document.pointerLockElement && this.enabled) {
+        //         // Don't show the lock message if loading screen is visible
+        //         const loadingScreen = document.getElementById('loading-screen');
+        //         if (loadingScreen) return;
                 
-                // Add a message to the screen that instructs the user to click to resume
-                const lockMessage = document.getElementById('lock-message') || (() => {
-                    const msg = document.createElement('div');
-                    msg.id = 'lock-message';
-                    msg.style.position = 'absolute';
-                    msg.style.top = '50%';
-                    msg.style.left = '50%';
-                    msg.style.transform = 'translate(-50%, -50%)';
-                    msg.style.color = 'white';
-                    msg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                    msg.style.padding = '20px';
-                    msg.style.borderRadius = '5px';
-                    msg.style.textAlign = 'center';
-                    msg.style.zIndex = '1000';
-                    document.body.appendChild(msg);
-                    return msg;
-                })();
+        //         // Add a message to the screen that instructs the user to click to resume
+        //         const lockMessage = document.getElementById('lock-message') || (() => {
+        //             const msg = document.createElement('div');
+        //             msg.id = 'lock-message';
+        //             msg.style.position = 'absolute';
+        //             msg.style.top = '50%';
+        //             msg.style.left = '50%';
+        //             msg.style.transform = 'translate(-50%, -50%)';
+        //             msg.style.color = 'white';
+        //             msg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        //             msg.style.padding = '20px';
+        //             msg.style.borderRadius = '5px';
+        //             msg.style.textAlign = 'center';
+        //             msg.style.zIndex = '1000';
+        //             document.body.appendChild(msg);
+        //             return msg;
+        //         })();
                 
-                lockMessage.textContent = 'Resume Game';
-                lockMessage.style.display = 'block';
-            } else {
-                // Hide message when controls are locked
-                const lockMessage = document.getElementById('lock-message');
-                if (lockMessage) {
-                    lockMessage.style.display = 'none';
-                }
+        //         lockMessage.textContent = 'Resume Game';
+        //         lockMessage.style.display = 'block';
+        //     } else {
+        //         // Hide message when controls are locked
+        //         const lockMessage = document.getElementById('lock-message');
+        //         if (lockMessage) {
+        //             lockMessage.style.display = 'none';
+        //         }
                 
-                // Also hide loading screen if it's still visible when controls are locked
-                this.hideLoadingScreen();
-            }
-        });
+        //         // Also hide loading screen if it's still visible when controls are locked
+        //         this.hideLoadingScreen();
+        //     }
+        // });
     }
 
     handleKeyDown(event) {
