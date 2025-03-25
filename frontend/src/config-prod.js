@@ -19,5 +19,6 @@ export const spawner = {
         boost: 0x00ff00, //green
         debuff: 0xff0000, //red
         misc: 0x0000ff, //blue
+        rare: 0xffff00, //yellow
     }
 }; 
