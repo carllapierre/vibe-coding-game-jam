@@ -13,7 +13,6 @@ import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { consumeItem } from './spawners/collect-functions/consumeItem.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
-import { api } from './config.js';
 import { NetworkManager } from './network/NetworkManager.js';
 import { initWebGLTracker, logWebGLInfo, getActiveContextCount } from './utils/WebGLTracker.js';
 import sharedRenderer from './utils/SharedRenderer.js';
@@ -44,28 +43,6 @@ const renderer = sharedRenderer.getMainRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Add WebGL context loss handling
-renderer.domElement.addEventListener('webglcontextlost', function(event) {
-  event.preventDefault();
-  console.error('WebGL context lost:', event);
-  
-  // Notify user
-  const errorOverlay = document.createElement('div');
-  errorOverlay.style.position = 'fixed';
-  errorOverlay.style.top = '10px';
-  errorOverlay.style.left = '10px';
-  errorOverlay.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
-  errorOverlay.style.color = 'white';
-  errorOverlay.style.padding = '10px';
-  errorOverlay.style.zIndex = '10000';
-  errorOverlay.textContent = 'WebGL context lost. Please refresh the page.';
-  document.body.appendChild(errorOverlay);
-}, false);
-
-renderer.domElement.addEventListener('webglcontextrestored', function(event) {
-  console.log('WebGL context restored:', event);
-  location.reload(); // Best to just reload the page when context is restored
-}, false);
 
 // Detect any Three.js errors
 window.addEventListener('error', function(event) {

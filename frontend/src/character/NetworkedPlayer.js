@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { Vector3, CanvasTexture, SpriteMaterial, Sprite } from 'three';
-import { Character } from './Character.js';
 import { gsap } from 'gsap';
 
 /**

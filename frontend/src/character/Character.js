@@ -216,49 +216,25 @@ export class Character {
             if (!this.enabled) return;
             this.handleMouseDown(event);
         });
+        
+        // Simple click handler to lock controls
         document.addEventListener('click', () => {
             if (!this.enabled) return;
-            this.controls.lock();
+            if (!this.controls.isLocked) {
+                this.requestPointerLock();
+            }
         });
         
-        // // Add pointer lock change event to handle when user exits pointer lock
-        // document.addEventListener('pointerlockchange', () => {
-        //     if (!document.pointerLockElement && this.enabled) {
-        //         // Don't show the lock message if loading screen is visible
-        //         const loadingScreen = document.getElementById('loading-screen');
-        //         if (loadingScreen) return;
+        // Add pointer lock change event to handle when user exits pointer lock
+        document.addEventListener('pointerlockchange', () => {
+            if (!document.pointerLockElement && this.enabled) {
+                // Don't show the lock message if loading screen is visible
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen && !loadingScreen.style.opacity === '0') return;
                 
-        //         // Add a message to the screen that instructs the user to click to resume
-        //         const lockMessage = document.getElementById('lock-message') || (() => {
-        //             const msg = document.createElement('div');
-        //             msg.id = 'lock-message';
-        //             msg.style.position = 'absolute';
-        //             msg.style.top = '50%';
-        //             msg.style.left = '50%';
-        //             msg.style.transform = 'translate(-50%, -50%)';
-        //             msg.style.color = 'white';
-        //             msg.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        //             msg.style.padding = '20px';
-        //             msg.style.borderRadius = '5px';
-        //             msg.style.textAlign = 'center';
-        //             msg.style.zIndex = '1000';
-        //             document.body.appendChild(msg);
-        //             return msg;
-        //         })();
-                
-        //         lockMessage.textContent = 'Resume Game';
-        //         lockMessage.style.display = 'block';
-        //     } else {
-        //         // Hide message when controls are locked
-        //         const lockMessage = document.getElementById('lock-message');
-        //         if (lockMessage) {
-        //             lockMessage.style.display = 'none';
-        //         }
-                
-        //         // Also hide loading screen if it's still visible when controls are locked
-        //         this.hideLoadingScreen();
-        //     }
-        // });
+            } 
+        });
+        
     }
 
     handleKeyDown(event) {
@@ -645,109 +621,41 @@ export class Character {
         // Update collision sphere position
         this.collisionSphere.position.copy(this.camera.position);
         
-        if (!this.enabled || !this.controls.isLocked) return;
+        // Always process physics regardless of lock state
+        this.updatePhysics();
+        
+        // If controls aren't locked, update hand position after physics
+        if (!this.enabled || !this.controls.isLocked) {
+            this.updateHandPosition();
+            return;
+        }
 
+        // For locked controls, process regular gameplay
         // Check for portal collisions
         this.checkPortalCollisions();
         
+        // Update movement
         this.updateMovement();
-        this.updateHandAndPreviewModel();
+        
+        // Update hand position AFTER all camera movement is complete
+        this.updateHandPosition();
+        
+        // Now handle animations
+        this.updateHandAnimations();
     }
 
-    /**
-     * Check if the player is colliding with any portals
-     */
-    checkPortalCollisions() {
-        // Create a sphere representing the player's position
-        const playerPosition = this.camera.position.clone();
-        const playerSphere = new THREE.Sphere(playerPosition, this.playerRadius);
-        
-        // Find all portal objects in the scene
-        const portals = [];
-        this.scene.traverse(object => {
-            if (object.userData && object.userData.type === 'portal') {
-                portals.push(object);
-            }
-        });
-        
-        // Check collision with each portal
-        for (const portal of portals) {
-            // Skip if the portal has no collider
-            if (!portal.collider) continue;
-            
-            // Get portal world position (account for parent transformations)
-            const portalPosition = new THREE.Vector3();
-            const colliderWorldPosition = new THREE.Vector3();
-            
-            portal.getWorldPosition(portalPosition);
-            portal.collider.getWorldPosition(colliderWorldPosition);
-            
-            // Create a box for the portal's collider
-            const colliderSize = new THREE.Vector3(1.8, 2.8, 1); // Same as in PortalObject.createCollider
-            const halfSize = colliderSize.clone().multiplyScalar(0.5);
-            
-            // Create a box3 for collision detection
-            const box = new THREE.Box3().setFromCenterAndSize(
-                colliderWorldPosition,
-                colliderSize
-            );
-            
-            // Check for collision
-            if (box.intersectsSphere(playerSphere)) {
-                console.log(`Player entered portal: ${portal.userData.id}`);
-                
-                // Call portal's onPlayerEnter
-                if (typeof portal.onPlayerEnter === 'function') {
-                    portal.onPlayerEnter();
-                }
-                
-                // Execute the onEnter callback directly if no method available
-                if (portal.portalData && typeof portal.portalData.onEnter === 'function') {
-                    portal.portalData.onEnter();
-                }
-                
-                // Also check collider userData for onEnter function
-                if (portal.collider && portal.collider.userData && 
-                    typeof portal.collider.userData.onEnter === 'function') {
-                    portal.collider.userData.onEnter();
-                }
-                
-                // Add a slight delay before checking again to prevent multiple triggers
-                // for the same portal
-                portal.lastTriggered = Date.now();
-            }
-        }
-    }
-
-    updateMovement() {
-        const currentPosition = this.camera.position.clone();
-        
-        // Check if we're standing on something first - but be more precise with ground checks
-        const isOnGround = this.camera.position.y <= 2.001;
-        const isOnObject = this.checkStandingOnObject();
-        
-        // Apply gravity first
+    // Split physics from input-based movement
+    updatePhysics() {
+        // Apply gravity
         this.velocity.y -= this.gravity;
         
-        // Handle jumping logic separately from ground detection to make it more reliable
-        const wasOnGroundLastFrame = this.canJump;
+        // Check if we're standing on something
+        const isOnGround = this.camera.position.y <= 2.001;
+        const isOnObject = this.checkStandingOnObject();
         
         // Update jump flag - only if we're actually on a surface
         if (isOnGround || isOnObject) {
             this.canJump = true;
-        }
-        
-        // Process jump input with more lenient jumping conditions
-        if (this.keys[' ']) {
-            // If we can jump or were recently able to jump (small grace period for more responsive jumping)
-            if (this.canJump || wasOnGroundLastFrame) {
-                this.velocity.y = this.jumpForce;
-                this.canJump = false;
-                this.lastSurfaceY = null; // Clear surface memory when jumping
-                
-                // Small upward boost to clear objects more reliably
-                this.camera.position.y += 0.1;
-            }
         }
         
         // Vertical movement with improved positioning
@@ -767,6 +675,7 @@ export class Character {
             }
         } else {
             // We're in the air - apply normal physics
+            const currentPosition = this.camera.position.clone();
             const nextPositionY = currentPosition.clone();
             nextPositionY.y += this.velocity.y;
             
@@ -812,70 +721,63 @@ export class Character {
                 this.camera.position.y += this.velocity.y;
             }
         }
-
-        // Horizontal movement
-        const moveForward = this.keys.w ? 1 : (this.keys.s ? -1 : 0);
-        const moveRight = this.keys.d ? 1 : (this.keys.a ? -1 : 0);
         
-        // Check if character is moving horizontally
-        this.isMoving = moveForward !== 0 || moveRight !== 0;
-        
-        const potentialPosition = this.camera.position.clone();
-        
-        if (moveForward !== 0) {
-            this.controls.moveForward(moveForward * this.moveSpeed);
-            if (this.checkCollision(this.camera.position)) {
-                this.camera.position.copy(potentialPosition);
-            } else {
-                potentialPosition.copy(this.camera.position);
-            }
-        }
-        
-        if (moveRight !== 0) {
-            this.controls.moveRight(moveRight * this.moveSpeed);
-            if (this.checkCollision(this.camera.position)) {
-                this.camera.position.copy(potentialPosition);
-            }
-        }
-
-        // Update camera bobbing
-        if (this.isMoving && this.canJump) {  // Only bob when moving and on ground
-            this.bobTime += this.moveSpeed * this.bobFrequency;
-            const targetBobPosition = Math.sin(this.bobTime) * this.bobAmplitude;
-            
-            // Smooth interpolation between current and target position
-            const bobDifference = targetBobPosition - this.lastBobPosition;
-            this.lastBobPosition += bobDifference * this.smoothingFactor;
-            
-            this.camera.position.y += bobDifference * this.smoothingFactor;
-        } else {
-            // Gradually return to neutral position when not moving
-            if (Math.abs(this.lastBobPosition) > 0.001) {
-                this.lastBobPosition *= 0.9; // Slower decay for smoother stop
-                this.camera.position.y -= this.lastBobPosition * this.smoothingFactor;
-            } else {
-                this.lastBobPosition = 0;
-                this.bobTime = 0;
-            }
-        }
+        // Hand position is now updated after all movements are complete
     }
 
-    updateHandAndPreviewModel() {
-        if (!this.handMesh) return;  // Remove previewModel check since we might not have one
-
-        const direction = new THREE.Vector3();
-        this.camera.getWorldDirection(direction);
+    // Update basic hand position to follow camera
+    updateHandPosition() {
+        if (!this.handMesh) return;
         
-        // Position the hand
-        const handOffset = new THREE.Vector3(0.6, -0.8, -1.1);
-        handOffset.applyQuaternion(this.camera.quaternion);
-        this.handMesh.position.copy(this.camera.position).add(handOffset);
+        // Remove unnecessary direction calculation
         
-        // Update hand rotation
+        // Use a simpler approach: Fixed offsets relative to camera
+        // The hand should be fixed in the bottom right corner of the view
+        
+        // Create a matrix to represent the camera's transformation
+        const matrix = new THREE.Matrix4();
+        matrix.makeRotationFromQuaternion(this.camera.quaternion);
+        
+        // Define fixed local position (relative to camera view)
+        const localHandPosition = new THREE.Vector3(0.6, -0.8, -1.1);
+        
+        // Transform local coordinates to world coordinates
+        localHandPosition.applyMatrix4(matrix);
+        
+        // Position hand at camera position + offset
+        this.handMesh.position.copy(this.camera.position).add(localHandPosition);
+        
+        // Set hand rotation directly from camera
         this.handMesh.quaternion.copy(this.camera.quaternion);
+        
+        // Apply fixed rotational offsets that won't change with camera movement
         this.handMesh.rotateX(Math.PI / -6.5);
         this.handMesh.rotateY(-Math.PI / 8);
         this.handMesh.rotateZ(Math.PI / 10);
+        
+        // Update preview model using the same approach
+        if (this.previewModel && !this.isThrowAnimating && !this.isConsumeAnimating) {
+            this.previewModel.visible = true;
+            
+            // Define fixed local position for preview model
+            const localPreviewPosition = new THREE.Vector3(0.5, -0.65, -1.5);
+            
+            // Transform to world coordinates using same matrix
+            localPreviewPosition.applyMatrix4(matrix);
+            
+            // Position preview model
+            this.previewModel.position.copy(this.camera.position).add(localPreviewPosition);
+            
+            // Set rotation directly from camera
+            this.previewModel.quaternion.copy(this.camera.quaternion);
+            this.previewModel.rotateX(Math.PI / 4);
+            this.previewModel.rotateY(Math.PI / 4);
+        }
+    }
+
+    // Only handle animations when controls are locked
+    updateHandAnimations() {
+        if (!this.handMesh) return;
 
         if (this.isThrowAnimating) {
             const elapsed = Date.now() - this.throwAnimationStartTime;
@@ -975,15 +877,7 @@ export class Character {
             }
         }
         else if (this.previewModel) {
-            this.previewModel.visible = true;
-            const handTipOffset = new THREE.Vector3(0.5, -0.65, -1.5);
-            handTipOffset.applyQuaternion(this.camera.quaternion);
-            this.previewModel.position.copy(this.camera.position).add(handTipOffset);
-            
-            this.previewModel.quaternion.copy(this.camera.quaternion);
-            this.previewModel.rotateX(Math.PI / 4);
-            this.previewModel.rotateY(Math.PI / 4);
-
+            // Handle preview model growth animation
             const growElapsed = Date.now() - this.previewGrowStartTime;
             if (growElapsed < this.growDuration) {
                 const growProgress = growElapsed / this.growDuration;
@@ -995,6 +889,69 @@ export class Character {
                     this.previewModel.baseScale,
                     this.previewModel.baseScale
                 );
+            }
+        }
+    }
+
+    updateMovement() {
+        const currentPosition = this.camera.position.clone();
+        
+        // Process jump input
+        if (this.keys[' ']) {
+            // If we can jump or were recently able to jump (small grace period for more responsive jumping)
+            if (this.canJump) {
+                this.velocity.y = this.jumpForce;
+                this.canJump = false;
+                this.lastSurfaceY = null; // Clear surface memory when jumping
+                
+                // Small upward boost to clear objects more reliably
+                this.camera.position.y += 0.1;
+            }
+        }
+
+        // Horizontal movement
+        const moveForward = this.keys.w ? 1 : (this.keys.s ? -1 : 0);
+        const moveRight = this.keys.d ? 1 : (this.keys.a ? -1 : 0);
+        
+        // Check if character is moving horizontally
+        this.isMoving = moveForward !== 0 || moveRight !== 0;
+        
+        const potentialPosition = this.camera.position.clone();
+        
+        if (moveForward !== 0) {
+            this.controls.moveForward(moveForward * this.moveSpeed);
+            if (this.checkCollision(this.camera.position)) {
+                this.camera.position.copy(potentialPosition);
+            } else {
+                potentialPosition.copy(this.camera.position);
+            }
+        }
+        
+        if (moveRight !== 0) {
+            this.controls.moveRight(moveRight * this.moveSpeed);
+            if (this.checkCollision(this.camera.position)) {
+                this.camera.position.copy(potentialPosition);
+            }
+        }
+
+        // Update camera bobbing
+        if (this.isMoving && this.canJump) {  // Only bob when moving and on ground
+            this.bobTime += this.moveSpeed * this.bobFrequency;
+            const targetBobPosition = Math.sin(this.bobTime) * this.bobAmplitude;
+            
+            // Smooth interpolation between current and target position
+            const bobDifference = targetBobPosition - this.lastBobPosition;
+            this.lastBobPosition += bobDifference * this.smoothingFactor;
+            
+            this.camera.position.y += bobDifference * this.smoothingFactor;
+        } else {
+            // Gradually return to neutral position when not moving
+            if (Math.abs(this.lastBobPosition) > 0.001) {
+                this.lastBobPosition *= 0.9; // Slower decay for smoother stop
+                this.camera.position.y -= this.lastBobPosition * this.smoothingFactor;
+            } else {
+                this.lastBobPosition = 0;
+                this.bobTime = 0;
             }
         }
     }
@@ -1074,4 +1031,134 @@ export class Character {
             }, 500);
         }
     }
+
+    /**
+     * Check if the player is colliding with any portals
+     */
+    checkPortalCollisions() {
+        // Create a sphere representing the player's position
+        const playerPosition = this.camera.position.clone();
+        const playerSphere = new THREE.Sphere(playerPosition, this.playerRadius);
+        
+        // Find all portal objects in the scene
+        const portals = [];
+        this.scene.traverse(object => {
+            if (object.userData && object.userData.type === 'portal') {
+                portals.push(object);
+            }
+        });
+        
+        // Check collision with each portal
+        for (const portal of portals) {
+            // Skip if the portal has no collider
+            if (!portal.collider) continue;
+            
+            // Get portal world position (account for parent transformations)
+            const portalPosition = new THREE.Vector3();
+            const colliderWorldPosition = new THREE.Vector3();
+            
+            portal.getWorldPosition(portalPosition);
+            portal.collider.getWorldPosition(colliderWorldPosition);
+            
+            // Create a box for the portal's collider
+            const colliderSize = new THREE.Vector3(1.8, 2.8, 1); // Same as in PortalObject.createCollider
+            const halfSize = colliderSize.clone().multiplyScalar(0.5);
+            
+            // Create a box3 for collision detection
+            const box = new THREE.Box3().setFromCenterAndSize(
+                colliderWorldPosition,
+                colliderSize
+            );
+            
+            // Check for collision
+            if (box.intersectsSphere(playerSphere)) {
+                console.log(`Player entered portal: ${portal.userData.id}`);
+                
+                // Call portal's onPlayerEnter
+                if (typeof portal.onPlayerEnter === 'function') {
+                    portal.onPlayerEnter();
+                }
+                
+                // Execute the onEnter callback directly if no method available
+                if (portal.portalData && typeof portal.portalData.onEnter === 'function') {
+                    portal.portalData.onEnter();
+                }
+                
+                // Also check collider userData for onEnter function
+                if (portal.collider && portal.collider.userData && 
+                    typeof portal.collider.userData.onEnter === 'function') {
+                    portal.collider.userData.onEnter();
+                }
+                
+                // Add a slight delay before checking again to prevent multiple triggers
+                // for the same portal
+                portal.lastTriggered = Date.now();
+            }
+        }
+    }
+
+    // Request pointer lock with error handling and debouncing
+    requestPointerLock() {
+        // Check if we're already processing a lock request
+        if (this.lockInProgress) return;
+        
+        // Set flag to prevent multiple lock requests
+        this.lockInProgress = true;
+        
+        // Add a short delay to avoid race conditions
+        setTimeout(() => {
+            try {
+                // Only request if we're not already locked
+                if (!document.pointerLockElement) {
+                    console.log('Requesting pointer lock...');
+                    
+                    // Create a click-to-continue overlay that will trigger the lock
+                    // This ensures a direct connection between user gesture and lock request
+                    const overlay = document.createElement('div');
+                    overlay.id = 'click-to-lock-overlay';
+                    overlay.style.position = 'absolute';
+                    overlay.style.top = '0';
+                    overlay.style.left = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.cursor = 'pointer';
+                    overlay.style.zIndex = '2000';
+                    overlay.style.backgroundColor = 'rgba(0,0,0,0.01)'; // Almost transparent
+                    
+                    // Handle the click on the overlay
+                    const handleOverlayClick = () => {
+                        console.log('Overlay clicked, requesting lock');
+                        // Remove the overlay
+                        document.body.removeChild(overlay);
+                        
+                        // Now that we have a direct user gesture, request the lock
+                        this.controls.lock();
+                        
+                        // Hide loading screen if it's visible
+                        this.hideLoadingScreen();
+                        
+                        // Clear the lock in progress flag after a delay
+                        setTimeout(() => {
+                            this.lockInProgress = false;
+                        }, 500);
+                    };
+                    
+                    overlay.addEventListener('click', handleOverlayClick, { once: true });
+                    document.body.appendChild(overlay);
+                    
+                    // Also show the lock message underneath the overlay
+                    this.showLockMessage();
+                } else {
+                    // Already locked, release the flag
+                    this.lockInProgress = false;
+                }
+            } catch (error) {
+                console.warn("Error requesting pointer lock:", error);
+                // Show message indicating user needs to click
+                // Clear the lock in progress flag
+                this.lockInProgress = false;
+            }
+        }, 100); // Short delay to avoid race conditions
+    }
+
 } 
