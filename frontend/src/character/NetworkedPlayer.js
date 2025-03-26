@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { Vector3, CanvasTexture, SpriteMaterial, Sprite } from 'three';
+import { Vector3 } from 'three';
 import { gsap } from 'gsap';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterRegistry } from '../registries/CharacterRegistry.js';
+import { NameTag } from './NameTag.js';
 
 /**
  * NetworkedPlayerManager is responsible for managing all networked players.
@@ -14,25 +15,11 @@ export class NetworkedPlayerManager {
     this.players = new Map(); // Map of sessionId -> NetworkedPlayer
     this.loader = new GLTFLoader();
     
-    // Shared resources
-    this.initSharedResources();
-    
     // Animation settings
     this.animationSettings = {
       duration: 0.2,
       ease: "power3.out"
     };
-  }
-  
-  /**
-   * Initialize shared resources used by all networked players
-   */
-  initSharedResources() {
-    // Create shared name tag canvas
-    this.nameTagCanvas = document.createElement('canvas');
-    this.nameTagCanvas.width = 256;
-    this.nameTagCanvas.height = 64;
-    this.nameTagContext = this.nameTagCanvas.getContext('2d');
   }
   
   /**
@@ -50,15 +37,13 @@ export class NetworkedPlayerManager {
     }
     
     try {
-      // Create a new player with shared resources
+      // Create a new player
       const player = new NetworkedPlayer(
         sessionId, 
         playerData, 
         this.scene,
         {
-          loader: this.loader,
-          nameTagCanvas: this.nameTagCanvas,
-          nameTagContext: this.nameTagContext
+          loader: this.loader
         }
       );
       
@@ -109,62 +94,6 @@ export class NetworkedPlayerManager {
   }
   
   /**
-   * Create a name tag texture for a player
-   * @param {string} playerName - The name to display
-   * @returns {THREE.Texture} The created texture
-   */
-  createNameTagTexture(playerName) {
-    const context = this.nameTagContext;
-    const canvas = this.nameTagCanvas;
-    
-    // Clear the canvas
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Background with rounded corners
-    const cornerRadius = 10;
-    
-    // Draw rounded rectangle
-    context.beginPath();
-    context.moveTo(cornerRadius, 0);
-    context.lineTo(canvas.width - cornerRadius, 0);
-    context.quadraticCurveTo(canvas.width, 0, canvas.width, cornerRadius);
-    context.lineTo(canvas.width, canvas.height - cornerRadius);
-    context.quadraticCurveTo(canvas.width, canvas.height, canvas.width - cornerRadius, canvas.height);
-    context.lineTo(cornerRadius, canvas.height);
-    context.quadraticCurveTo(0, canvas.height, 0, canvas.height - cornerRadius);
-    context.lineTo(0, cornerRadius);
-    context.quadraticCurveTo(0, 0, cornerRadius, 0);
-    context.closePath();
-    
-    // Fill with gradient
-    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, 'rgba(50, 150, 50, 0.7)');
-    gradient.addColorStop(1, 'rgba(30, 100, 30, 0.7)');
-    context.fillStyle = gradient;
-    context.fill();
-    
-    // Add border
-    context.lineWidth = 2;
-    context.strokeStyle = 'rgba(200, 255, 200, 0.7)';
-    context.stroke();
-    
-    // Draw the text with shadow
-    context.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    context.shadowBlur = 5;
-    context.font = 'bold 24px Arial, Helvetica, sans-serif';
-    context.fillStyle = 'white';
-    context.textAlign = 'center';
-    context.fillText(playerName, canvas.width / 2, canvas.height / 2);
-    
-    // Create a texture from the canvas
-    const texture = new CanvasTexture(canvas);
-    texture.anisotropy = 16; // Sharper text
-    texture.needsUpdate = true;
-    
-    return texture;
-  }
-  
-  /**
    * Dispose of all resources when the manager is no longer needed
    */
   dispose() {
@@ -174,9 +103,6 @@ export class NetworkedPlayerManager {
     }
     
     this.players.clear();
-    
-    // Dispose of shared resources
-    this.nameTagCanvas.dispose();
   }
 }
 
@@ -220,6 +146,9 @@ export class NetworkedPlayer {
     this.currentPosition = new Vector3().copy(this.targetPosition);
     this.targetRotationY = Number(this.playerData.rotationY || 0);
     this.currentRotationY = this.targetRotationY;
+    
+    // Create name tag
+    this.nameTag = new NameTag();
     
     this.createModel();
   }
@@ -267,7 +196,7 @@ export class NetworkedPlayer {
       this.addHitbox();
       
       // Now that model is loaded, add the name tag
-      this.addNameTag(this.playerData.name || "Player");
+      this.nameTag.create(this.model, this.playerData.name || "Player");
     }, undefined, (error) => {
       console.error('Error loading character model:', error);
     });
@@ -291,80 +220,6 @@ export class NetworkedPlayer {
     
     // Add to the model
     this.model.add(this.hitboxMesh);
-  }
-  
-  /**
-   * Draw the name tag on the shared canvas
-   */
-  drawNameTag(playerName) {
-    const context = this.resources.nameTagContext;
-    const canvas = this.resources.nameTagCanvas;
-    
-    // Clear the canvas
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Add a slight background to help with readability against bloom
-    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Simpler text with stroke to make it more readable with bloom
-    context.font = 'bold 32px Arial, Helvetica, sans-serif';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    
-    // Add a text stroke/outline to make it more visible with bloom
-    context.strokeStyle = 'black';
-    context.lineWidth = 4;
-    context.strokeText(playerName, canvas.width / 2, canvas.height / 2);
-    
-    // Fill the text
-    context.fillStyle = 'white';
-    context.fillText(playerName, canvas.width / 2, canvas.height / 2);
-    
-    // Update the texture
-    if (this.nameSprite && this.nameSprite.material.map) {
-      this.nameSprite.material.map.needsUpdate = true;
-    }
-  }
-  
-  /**
-   * Add a name tag above the player
-   */
-  addNameTag(playerName) {
-    if (!this.model) return;
-    
-    try {
-      // Create a texture using the manager's shared canvas
-      const texture = new CanvasTexture(this.resources.nameTagCanvas);
-      texture.needsUpdate = true;
-      
-      // Draw the name tag (using shared canvas)
-      this.drawNameTag(playerName);
-      
-      // Create sprite material with the texture
-      const material = new SpriteMaterial({ 
-        map: texture,
-        transparent: true,
-        depthTest: false 
-      });
-      
-      // Create the sprite
-      const nameSprite = new Sprite(material);
-      nameSprite.position.set(0, 2.2, 0); // Lower position closer to character
-      nameSprite.scale.set(2.5, 0.6, 1); // Adjust size
-      
-      // Add the sprite to the player model
-      this.model.add(nameSprite);
-      
-      // Store references
-      this.nameSprite = nameSprite;
-      this.playerName = playerName;
-      
-      // Debug log to confirm name tag creation
-      console.log(`Created name tag for player: ${playerName}`);
-    } catch (error) {
-      console.error('Failed to create name tag:', error);
-    }
   }
   
   /**
@@ -425,9 +280,8 @@ export class NetworkedPlayer {
       this.animateToNewPosition(newPosition, distanceToNewTarget);
       
       // Update name if needed
-      if (state.name && state.name !== this.playerName) {
-        this.drawNameTag(state.name);
-        this.playerName = state.name;
+      if (state.name && this.nameTag) {
+        this.nameTag.update(state.name);
       }
     } catch (error) {
       console.error('Error updating networked player state:', error);
@@ -574,9 +428,9 @@ export class NetworkedPlayer {
       }
       
       // Clean up name tag
-      if (this.nameSprite) {
-        if (this.nameSprite.material.map) this.nameSprite.material.map.dispose();
-        if (this.nameSprite.material) this.nameSprite.material.dispose();
+      if (this.nameTag) {
+        this.nameTag.dispose();
+        this.nameTag = null;
       }
     } catch (error) {
       console.error('Error disposing NetworkedPlayer:', error);
