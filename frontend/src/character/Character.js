@@ -1094,7 +1094,6 @@ export class Character {
             
             // Check for collision
             if (box.intersectsSphere(playerSphere)) {
-                console.log(`Player entered portal: ${portal.userData.id}`);
                 
                 // Call portal's onPlayerEnter
                 if (typeof portal.onPlayerEnter === 'function') {
@@ -1132,13 +1131,11 @@ export class Character {
             try {
                 // Only request if we're not already locked
                 if (!document.pointerLockElement) {
-                    console.log('Requesting pointer lock...');
                     
                     // Direct request on user action - try to request immediately first
                     try {
                         this.controls.lock();
                     } catch (err) {
-                        console.warn("Direct pointer lock failed, using fallback method:", err);
                         
                         // Create a click-to-continue overlay that will trigger the lock
                         // This ensures a direct connection between user gesture and lock request
@@ -1162,7 +1159,6 @@ export class Character {
                         
                         // Handle the click on the overlay
                         const handleOverlayClick = () => {
-                            console.log('Overlay clicked, requesting lock');
                             // Remove the overlay
                             document.body.removeChild(overlay);
                             
