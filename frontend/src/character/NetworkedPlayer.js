@@ -218,9 +218,6 @@ export class NetworkedPlayer {
       // Add to scene
       this.scene.add(this.model);
       
-      // Add a temporary hitbox visualization
-      this.addHitbox();
-      
       // Log found animations
       if (gltf.animations && gltf.animations.length > 0) {
         gltf.animations.forEach(anim => {
@@ -238,26 +235,6 @@ export class NetworkedPlayer {
     }, undefined, (error) => {
       console.error('Error loading character model:', error);
     });
-  }
-  
-  /**
-   * Add a visible hitbox around the character
-   */
-  addHitbox() {
-    // Create a wireframe box to represent the hitbox
-    const hitboxGeometry = new THREE.BoxGeometry(0.7, 0.8, 0.7);
-    const hitboxMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff0000,
-      wireframe: true
-    });
-    
-    this.hitboxMesh = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
-    
-    // Position the hitbox slightly higher for better collision detection
-    this.hitboxMesh.position.y = 0.5;
-    
-    // Add to the model
-    this.model.add(this.hitboxMesh);
   }
   
   /**
