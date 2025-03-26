@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { ColyseusManager } from './ColyseusManager.js';
 import { NetworkedPlayerManager } from '../character/NetworkedPlayer.js';
 import { NetworkedProjectile } from '../projectiles/NetworkedProjectile.js';
@@ -124,7 +125,7 @@ export class NetworkManager {
         if (!this.localPlayer) return;
         
         // Character class uses camera position for the player position
-        let position, rotation;
+        let position, rotationY;
         
         if (typeof this.localPlayer.getPosition === 'function') {
           position = this.localPlayer.getPosition();
@@ -139,11 +140,17 @@ export class NetworkManager {
           return;
         }
         
-        // Get rotation from camera
+        // Get rotation from camera - compute proper heading angle
         if (this.localPlayer.camera) {
-          rotation = this.localPlayer.camera.rotation;
+          // Extract the forward direction vector from the camera
+          const direction = new THREE.Vector3(0, 0, -1);
+          direction.applyQuaternion(this.localPlayer.camera.quaternion);
+          
+          // Calculate the angle in the XZ plane (heading/yaw)
+          rotationY = Math.atan2(-direction.x, -direction.z);
+          
         } else {
-          rotation = { y: 0 };
+          rotationY = 0;
         }
         
         if (!position) return;
@@ -153,7 +160,7 @@ export class NetworkManager {
           position.x,
           position.y,
           position.z,
-          rotation?.y || 0
+          rotationY || 0
         );
       } catch (error) {
         console.error('Error sending position updates:', error);

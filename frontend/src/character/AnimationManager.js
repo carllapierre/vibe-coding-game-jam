@@ -51,7 +51,6 @@ export class AnimationManager {
     
     // Use provided animations
     if (externalAnimations && externalAnimations.length > 0) {
-      console.log(`Using ${externalAnimations.length} provided animations`);
       this.extractAnimations(externalAnimations);
     } else {
       console.warn('No animations provided to the animation manager');
@@ -69,7 +68,6 @@ export class AnimationManager {
     }
     
     animations.forEach(clip => {
-      console.log(`Animation found: ${clip.name} (${clip.duration.toFixed(2)}s)`);
       
       // Create action for this animation
       const action = this.mixer.clipAction(clip);
@@ -92,8 +90,6 @@ export class AnimationManager {
   setState(state) {
     // Don't change if it's the same state
     if (state === this.currentState) return;
-    
-    console.log(`Setting animation state to: ${state}`);
     
     // Get animation name for this state
     const animationName = this.stateAnimationMap[state] || this.fallbackAnimation;
@@ -123,7 +119,6 @@ export class AnimationManager {
     this.currentState = state;
     this.currentAction = targetAction;
     
-    console.log(`Character animation changed to ${state} using "${animationName}" (speed: ${speed})`);
   }
   
   /**

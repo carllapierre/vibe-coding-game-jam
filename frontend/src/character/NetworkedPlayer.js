@@ -154,15 +154,34 @@ export class NetworkedPlayer {
     // Create name tag
     this.nameTag = new NameTag();
     
+    // Select a random character ID for this player
+    this.characterId = this.getRandomCharacterId();
+    
     this.createModel();
+  }
+  
+  /**
+   * Get a random character ID from the registry
+   * @returns {string} A random character ID
+   */
+  getRandomCharacterId() {
+    // Get all available character IDs
+    const availableCharacters = CharacterRegistry.items.map(item => item.id);
+    
+    // Use player's session ID to seed the random selection to keep it consistent
+    // This ensures the same player always gets the same character model
+    const seed = this.sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const randomIndex = seed % availableCharacters.length;
+    
+    return availableCharacters[randomIndex];
   }
   
   /**
    * Create player model using shared resources
    */
   createModel() {
-    // Get the model path from CharacterRegistry
-    const modelPath = CharacterRegistry.getModelPath('character-1');
+    // Get the model path from CharacterRegistry using the random character
+    const modelPath = CharacterRegistry.getModelPath(this.characterId);
     if (!modelPath) {
       console.error('Failed to get character model path');
       return;
@@ -173,7 +192,7 @@ export class NetworkedPlayer {
       this.model = gltf.scene;
       
       // Apply scale from registry
-      const characterConfig = CharacterRegistry.items.find(item => item.id === 'character-1');
+      const characterConfig = CharacterRegistry.items.find(item => item.id === this.characterId);
       if (characterConfig) {
         this.model.scale.set(characterConfig.scale, characterConfig.scale, characterConfig.scale);
       }
@@ -191,7 +210,10 @@ export class NetworkedPlayer {
       }
       
       this.model.position.copy(adjustedPosition);
-      this.model.rotation.y = this.currentRotationY;
+      
+      // Add 180-degree rotation to make model face the same direction as the camera
+      this.modelRotationOffset = Math.PI; // 180 degrees in radians
+      this.model.rotation.y = this.currentRotationY + this.modelRotationOffset;
       
       // Add to scene
       this.scene.add(this.model);
@@ -201,9 +223,7 @@ export class NetworkedPlayer {
       
       // Log found animations
       if (gltf.animations && gltf.animations.length > 0) {
-        console.log(`Found ${gltf.animations.length} animations in the model:`);
         gltf.animations.forEach(anim => {
-          console.log(`- Animation: ${anim.name}, Duration: ${anim.duration.toFixed(2)}s`);
         });
       }
       
@@ -403,14 +423,39 @@ export class NetworkedPlayer {
       }
     });
     
-    // Animate rotation
+    // Calculate the shortest rotation path 
     if (this.model) {
+      // Find the shortest angle between current and target rotation
+      let currentAngle = this.model.rotation.y - (this.modelRotationOffset || 0);
+      let targetAngle = this.targetRotationY;
+      
+      // Normalize angles to 0-2π range
+      while (currentAngle < 0) currentAngle += Math.PI * 2;
+      while (targetAngle < 0) targetAngle += Math.PI * 2;
+      
+      // Find the shortest path
+      let angleDiff = targetAngle - currentAngle;
+      
+      // If angle difference is greater than 180 degrees (π radians), go the other way
+      if (Math.abs(angleDiff) > Math.PI) {
+        if (angleDiff > 0) {
+          angleDiff -= Math.PI * 2;
+        } else {
+          angleDiff += Math.PI * 2;
+        }
+      }
+      
+      // Calculate the target angle using the shortest path and add the model offset
+      const shortestPathTarget = currentAngle + angleDiff;
+      const finalRotation = shortestPathTarget + (this.modelRotationOffset || 0);
+      
+      // Animate rotation
       gsap.to(this.model.rotation, {
-        y: this.targetRotationY,
+        y: finalRotation,
         duration: Math.min(duration * 1.2, 0.4),
         ease: "sine.out",
         onUpdate: () => {
-          this.currentRotationY = this.model.rotation.y;
+          this.currentRotationY = this.model.rotation.y - (this.modelRotationOffset || 0);
         }
       });
     }

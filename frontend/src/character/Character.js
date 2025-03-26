@@ -1134,39 +1134,52 @@ export class Character {
                 if (!document.pointerLockElement) {
                     console.log('Requesting pointer lock...');
                     
-                    // Create a click-to-continue overlay that will trigger the lock
-                    // This ensures a direct connection between user gesture and lock request
-                    const overlay = document.createElement('div');
-                    overlay.id = 'click-to-lock-overlay';
-                    overlay.style.position = 'absolute';
-                    overlay.style.top = '0';
-                    overlay.style.left = '0';
-                    overlay.style.width = '100%';
-                    overlay.style.height = '100%';
-                    overlay.style.cursor = 'pointer';
-                    overlay.style.zIndex = '2000';
-                    overlay.style.backgroundColor = 'rgba(0,0,0,0.01)'; // Almost transparent
-                    
-                    // Handle the click on the overlay
-                    const handleOverlayClick = () => {
-                        console.log('Overlay clicked, requesting lock');
-                        // Remove the overlay
-                        document.body.removeChild(overlay);
-                        
-                        // Now that we have a direct user gesture, request the lock
+                    // Direct request on user action - try to request immediately first
+                    try {
                         this.controls.lock();
+                    } catch (err) {
+                        console.warn("Direct pointer lock failed, using fallback method:", err);
                         
-                        // Hide loading screen if it's visible
-                        this.hideLoadingScreen();
+                        // Create a click-to-continue overlay that will trigger the lock
+                        // This ensures a direct connection between user gesture and lock request
+                        const overlay = document.createElement('div');
+                        overlay.id = 'click-to-lock-overlay';
+                        overlay.style.position = 'absolute';
+                        overlay.style.top = '0';
+                        overlay.style.left = '0';
+                        overlay.style.width = '100%';
+                        overlay.style.height = '100%';
+                        overlay.style.cursor = 'pointer';
+                        overlay.style.zIndex = '2000';
+                        overlay.style.backgroundColor = 'rgba(0,0,0,0.3)';
+                        overlay.style.display = 'flex';
+                        overlay.style.justifyContent = 'center';
+                        overlay.style.alignItems = 'center';
+                        overlay.style.color = 'white';
+                        overlay.style.fontSize = '24px';
+                        overlay.style.fontWeight = 'bold';
+                        overlay.textContent = 'Click to continue';
                         
-                        // Clear the lock in progress flag after a delay
-                        setTimeout(() => {
-                            this.lockInProgress = false;
-                        }, 500);
-                    };
-                    
-                    overlay.addEventListener('click', handleOverlayClick, { once: true });
-                    document.body.appendChild(overlay);
+                        // Handle the click on the overlay
+                        const handleOverlayClick = () => {
+                            console.log('Overlay clicked, requesting lock');
+                            // Remove the overlay
+                            document.body.removeChild(overlay);
+                            
+                            // Now that we have a direct user gesture, request the lock
+                            try {
+                                this.controls.lock();
+                            } catch (lockErr) {
+                                console.error("Failed to lock even after click:", lockErr);
+                            }
+                            
+                            // Hide loading screen if it's visible
+                            this.hideLoadingScreen();
+                        };
+                        
+                        overlay.addEventListener('click', handleOverlayClick, { once: true });
+                        document.body.appendChild(overlay);
+                    }
                     
                     // Also show the lock message underneath the overlay
                     this.showLockMessage();
@@ -1180,6 +1193,11 @@ export class Character {
                 // Clear the lock in progress flag
                 this.lockInProgress = false;
             }
+            
+            // Clear the lock in progress flag after a delay
+            setTimeout(() => {
+                this.lockInProgress = false;
+            }, 500);
         }, 100); // Short delay to avoid race conditions
     }
 

@@ -154,7 +154,6 @@ export class ColyseusManager extends EventEmitter {
     
     // Listen for projectile creation events
     this.room.onMessage('projectile', (data) => {
-      console.log(`Received projectile data from server:`, data.itemType);
       // Forward to listeners with playerId added
       this.emit('projectileCreated', {
         ...data,
@@ -164,13 +163,11 @@ export class ColyseusManager extends EventEmitter {
     
     // Listen for damage events
     this.room.onMessage('damage', (data) => {
-      console.log(`Received damage event from server:`, data);
       this.emit('playerDamaged', data);
     });
     
     // Listen for player respawn events
     this.room.onMessage('playerRespawned', (data) => {
-      console.log(`Player respawned:`, data);
       this.emit('playerRespawned', data);
     });
   }
@@ -297,7 +294,6 @@ export class ColyseusManager extends EventEmitter {
   sendDamage(targetId, amount) {
     if (!this.room) return;
     
-    console.log(`Sending damage to server: target=${targetId}, amount=${amount}`);
     this.room.send('damage', { targetId, amount });
   }
   

@@ -58,8 +58,6 @@ export class NameTag {
       // Store the player name
       this.playerName = playerName;
       
-      // Debug log to confirm name tag creation
-      console.log(`Created name tag for player: ${playerName}`);
     } catch (error) {
       console.error('Failed to create name tag:', error);
     }
