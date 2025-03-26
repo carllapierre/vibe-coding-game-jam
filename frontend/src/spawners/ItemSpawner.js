@@ -24,7 +24,7 @@ export class ItemSpawner extends Spawner {
         this.active = true;
         this.respawnTimeoutId = null;
         this.isSpawning = false;
-        
+        this.cleanupTimeoutId = null;
     }
 
     clearTimeouts() {
@@ -159,13 +159,27 @@ export class ItemSpawner extends Spawner {
             // Call the collection callback
             this.currentSpawnable.collect(player);
             
-            // Clean up the spawnable after collection animation
-            setTimeout(() => {
+            // Clean up the spawnable after collection animation - with safety measures
+            // Use a shorter timeout to ensure cleanup happens quickly
+            const cleanupTimeout = setTimeout(() => {
                 if (this.currentSpawnable) {
-                    this.currentSpawnable.cleanup();
-                    this.currentSpawnable = null;
+                    try {
+                        this.currentSpawnable.cleanup();
+                    } catch (e) {
+                        console.error("Error cleaning up spawnable during collection:", e);
+                    } finally {
+                        // Always set to null to avoid reference leaks
+                        this.currentSpawnable = null;
+                    }
                 }
-            }, 600);
+                // Clear the timeout reference
+                if (this.cleanupTimeoutId === cleanupTimeout) {
+                    this.cleanupTimeoutId = null;
+                }
+            }, 400);  // Reduced from 600ms for faster cleanup
+            
+            // Store timeout ID for later cancellation if needed
+            this.cleanupTimeoutId = cleanupTimeout;
             
             this.lastSpawnTime = Date.now();
             
@@ -189,12 +203,22 @@ export class ItemSpawner extends Spawner {
                     this.currentSpawnable.cleanup();
                 } catch (e) {
                     console.error("Error cleaning up spawnable:", e);
+                } finally {
+                    this.currentSpawnable = null;
                 }
-                this.currentSpawnable = null;
             }
             
             this.isRespawning = false;
             this.isSpawning = false;
+        }
+    }
+
+    // Add a method to completely clear all timeouts
+    clearAllTimeouts() {
+        this.clearTimeouts();
+        if (this.cleanupTimeoutId) {
+            clearTimeout(this.cleanupTimeoutId);
+            this.cleanupTimeoutId = null;
         }
     }
 

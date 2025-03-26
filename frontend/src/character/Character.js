@@ -390,16 +390,42 @@ export class Character {
         return this.inventory.consumeSelectedItem();
     }
 
+    /**
+     * Clean up preview model completely, ensuring it's removed from the scene
+     */
     clearPreviewModel() {
         if (this.previewModel) {
+            // First, make sure it's removed from the scene
             this.scene.remove(this.previewModel);
+            
+            // Clean up all materials and geometries
             this.previewModel.traverse((child) => {
                 if (child.isMesh) {
-                    child.geometry.dispose();
-                    child.material.dispose();
+                    if (child.geometry) {
+                        child.geometry.dispose();
+                    }
+                    
+                    if (child.material) {
+                        // Handle array of materials
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(material => {
+                                if (material.map) material.map.dispose();
+                                material.dispose();
+                            });
+                        } else {
+                            // Handle single material
+                            if (child.material.map) child.material.map.dispose();
+                            child.material.dispose();
+                        }
+                    }
                 }
             });
+            
+            // Nullify the reference
             this.previewModel = null;
+            
+            // Reset preview growth timing
+            this.previewGrowStartTime = 0;
         }
     }
 
@@ -761,6 +787,7 @@ export class Character {
         
         // Update preview model using the same approach
         if (this.previewModel && !this.isThrowAnimating && !this.isConsumeAnimating) {
+            // Ensure model is visible (might have been made invisible during animations)
             this.previewModel.visible = true;
             
             // Define fixed local position for preview model
@@ -776,6 +803,15 @@ export class Character {
             this.previewModel.quaternion.copy(this.camera.quaternion);
             this.previewModel.rotateX(Math.PI / 4);
             this.previewModel.rotateY(Math.PI / 4);
+            
+            // Reset opacity in case it was changed during animations
+            this.previewModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    if (child.material.transparent) {
+                        child.material.opacity = 1;
+                    }
+                }
+            });
         }
     }
 
@@ -861,22 +897,28 @@ export class Character {
                             child.material.opacity = finalOpacity;
                         }
                     });
+                    
+                    // When fully transparent, remove from scene to prevent lingering models
+                    if (progress >= 0.99) {
+                        // Remove the model completely when we're at the end of the animation
+                        // and it's fully transparent
+                        this.scene.remove(this.previewModel);
+                    }
                 }
             }
             
             if (progress === 1) {
                 this.isConsumeAnimating = false;
                 
-                // When animation is complete, check if we need to clear the model
+                // Force cleanup of the preview model - this is the most important fix
+                this.clearPreviewModel();
+                
+                // Now check if we need to show a new model
                 if (this.inventory) {
                     const currentSlot = this.inventory.getSelectedSlot();
                     if (currentSlot && currentSlot.item) {
                         this.updatePreviewModel();
-                    } else {
-                        this.clearPreviewModel();
                     }
-                } else {
-                    this.clearPreviewModel();
                 }
             }
         }

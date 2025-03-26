@@ -485,13 +485,9 @@ export class NetworkManager {
           // Verify each player in playerManager exists in remotePlayers
           this.playerManager.validatePlayers(remotePlayerIds);
           
-          console.log(`GC: ${remotePlayerIds.length} active remote players`);
         }
-        
-        // Log active projectiles count
-        if (NetworkedProjectile.activeProjectiles) {
-          console.log(`GC: ${NetworkedProjectile.activeProjectiles.length} active projectiles`);
-        }
+
+
       } catch (error) {
         console.error('Error during garbage collection:', error);
       }

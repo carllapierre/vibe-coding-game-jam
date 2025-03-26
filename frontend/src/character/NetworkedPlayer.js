@@ -297,12 +297,6 @@ export class NetworkedPlayer {
    */
   updateState(state) {
     try {
-      // Log incoming position data for debugging
-      console.log(`Player ${this.sessionId} state update:`, {
-        position: `(${state.x.toFixed(2)}, ${state.y.toFixed(2)}, ${state.z.toFixed(2)})`,
-        rotation: state.rotationY?.toFixed(2),
-        state: state.state
-      });
       
       // Calculate time since last update
       const now = Date.now();
