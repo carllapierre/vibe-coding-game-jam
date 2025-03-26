@@ -24,9 +24,23 @@ export class NetworkedProjectile {
     static updateAll(localPlayer) {
         for (let i = NetworkedProjectile.activeProjectiles.length - 1; i >= 0; i--) {
             const projectile = NetworkedProjectile.activeProjectiles[i];
-            projectile.update(localPlayer);
             
-            if (!projectile.foodProjectile && !projectile.foodProjectile.isActive) {
+            // Skip invalid projectiles
+            if (!projectile) {
+                NetworkedProjectile.activeProjectiles.splice(i, 1);
+                continue;
+            }
+            
+            try {
+                projectile.update(localPlayer);
+                
+                // Check if projectile should be removed from active list
+                if (!projectile.foodProjectile || (projectile.foodProjectile && !projectile.foodProjectile.isActive)) {
+                    NetworkedProjectile.activeProjectiles.splice(i, 1);
+                }
+            } catch (error) {
+                console.error('Error updating projectile:', error);
+                // Remove problematic projectile
                 NetworkedProjectile.activeProjectiles.splice(i, 1);
             }
         }

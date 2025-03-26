@@ -1,5 +1,5 @@
 import { ColyseusManager } from './ColyseusManager.js';
-import { NetworkedPlayer } from '../character/NetworkedPlayer.js';
+import { NetworkedPlayerManager } from '../character/NetworkedPlayer.js';
 import { NetworkedProjectile } from '../projectiles/NetworkedProjectile.js';
 
 /**
@@ -16,8 +16,8 @@ export class NetworkManager {
     this.localPlayer = localPlayer;
     this.colyseusManager = ColyseusManager.getInstance();
     
-    /** @type {Object.<string, NetworkedPlayer>} */
-    this.networkedPlayers = {};
+    // Create the player manager
+    this.playerManager = new NetworkedPlayerManager(scene);
     
     this.isConnected = false;
     this.sessionId = null;
@@ -67,10 +67,7 @@ export class NetworkManager {
         this.sessionId = null;
         
         // Clean up networked players
-        Object.values(this.networkedPlayers).forEach(player => {
-          player.dispose();
-        });
-        this.networkedPlayers = {};
+        this.playerManager.dispose();
       });
       
       // Set up player event listeners
@@ -173,17 +170,8 @@ export class NetworkManager {
       // Skip if it's our own session ID
       if (sessionId === this.sessionId) return;
       
-      // Check if player already exists, remove it first
-      if (this.networkedPlayers[sessionId]) {
-        this.networkedPlayers[sessionId].remove();
-        delete this.networkedPlayers[sessionId];
-      }
-      
-      // Create a new networked player immediately
-      if (this.scene) {
-        const networkedPlayer = new NetworkedPlayer(sessionId, player, this.scene);
-        this.networkedPlayers[sessionId] = networkedPlayer;
-      }
+      // Add the player using the manager
+      this.playerManager.addPlayer(sessionId, player);
     } catch (error) {
       console.error('Error in onPlayerJoined:', error);
     }
@@ -197,10 +185,8 @@ export class NetworkManager {
     try {
       console.log('Removing player:', sessionId);
       
-      if (this.networkedPlayers[sessionId]) {
-        this.networkedPlayers[sessionId].remove();
-        delete this.networkedPlayers[sessionId];
-      }
+      // Remove the player using the manager
+      this.playerManager.removePlayer(sessionId);
     } catch (error) {
       console.error('Error in onPlayerLeft:', error);
     }
@@ -217,12 +203,8 @@ export class NetworkManager {
       // Skip our own player
       if (sessionId === this.colyseusManager.sessionId) return;
       
-      // If we have this player, update their state
-      if (this.networkedPlayers[sessionId]) {
-        const networkedPlayer = this.networkedPlayers[sessionId];
-        // Call the GSAP-enabled updateState method
-        networkedPlayer.updateState(player);
-      }
+      // Update the player using the manager
+      this.playerManager.updatePlayer(sessionId, player);
     } catch (error) {
       console.error('Error handling player change:', error);
     }
@@ -445,80 +427,43 @@ export class NetworkManager {
   }
   
   /**
-   * Update method to be called in the game loop
-   * @param {number} delta - Time delta
+   * Update loop
+   * @param {number} delta - Time since last frame (in seconds)
    */
   update(delta) {
-    // Skip if not connected
-    if (!this.isConnected) return;
+    // Update networked players
+    this.playerManager.update(delta);
     
-    try {
-      // Call update on all networked players for prediction between network updates
-      Object.values(this.networkedPlayers).forEach(player => {
-        if (player && typeof player.update === 'function') {
-          player.update(delta);
-        }
-      });
-      
-      // Update all networked projectiles
+    // Update networked projectiles using the static updateAll method
+    if (this.localPlayer) {
       NetworkedProjectile.updateAll(this.localPlayer);
-      
-      // Check if we need to restart the update interval
-      if (!this.updateInterval) {
-        this.startSendingUpdates();
-      }
-    } catch (error) {
-      console.error('Error in network manager update:', error);
     }
   }
   
   /**
-   * Clean up resources when shutting down
+   * Clean up resources
    */
   dispose() {
-    try {
-      console.log('Disposing network manager');
-
-      // Clear update interval
-      if (this.updateInterval) {
-        clearInterval(this.updateInterval);
-        this.updateInterval = null;
-      }
-      
-      // Remove all networked players
-      Object.values(this.networkedPlayers).forEach(player => {
-        try {
-          if (player && typeof player.remove === 'function') {
-            player.remove();
-          }
-        } catch (error) {
-          console.error('Error removing networked player during cleanup:', error);
-        }
-      });
-      this.networkedPlayers = {};
-      
-      // Remove event listeners
-      this.colyseusManager.off('playerJoined', this.onPlayerJoined);
-      this.colyseusManager.off('playerLeft', this.onPlayerLeft);
-      this.colyseusManager.off('playerChanged', this.onPlayerChanged);
-      this.colyseusManager.off('projectileCreated', this.onProjectileCreated);
-      this.colyseusManager.off('playerDamaged', this.onPlayerDamaged);
-      this.colyseusManager.off('playerRespawned', this.onPlayerRespawned);
-      
-      // Remove global reference
-      if (window.networkManager === this) {
-        window.networkManager = null;
-      }
-      
-      // Disconnect from server
-      this.colyseusManager.disconnect();
-      
-      this.isConnected = false;
-      this.sessionId = null;
-      
-      console.log('Network manager disposed');
-    } catch (error) {
-      console.error('Error disposing network manager:', error);
+    // Clear update interval
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+    
+    // Remove event listeners
+    this.colyseusManager.off('playerJoined', this.onPlayerJoined);
+    this.colyseusManager.off('playerLeft', this.onPlayerLeft);
+    this.colyseusManager.off('playerChanged', this.onPlayerChanged);
+    this.colyseusManager.off('projectileCreated', this.onProjectileCreated);
+    this.colyseusManager.off('playerDamaged', this.onPlayerDamaged);
+    this.colyseusManager.off('playerRespawned', this.onPlayerRespawned);
+    
+    // Dispose of players
+    this.playerManager.dispose();
+    
+    // Clear global reference
+    if (window.networkManager === this) {
+      delete window.networkManager;
     }
   }
 } 

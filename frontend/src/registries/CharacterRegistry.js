@@ -1,10 +1,11 @@
 import { Registry } from '../core/Registry.js';
+import { assetPath } from '../utils/pathHelper.js';
 
 export class CharacterRegistry extends Registry {
     static DEFAULT_PATH = 'characters/';
     
     static items = [
-        { id: 'character-1', name: 'Tim', model: 'character-male-a.glb', scale: 1 },
+        { id: 'character-1', name: 'Tim', model: 'character-male-b.glb', scale: 4 },
     ];
 
     static getModelPath(id) {
