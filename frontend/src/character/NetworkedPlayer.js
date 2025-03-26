@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Vector3, CanvasTexture, SpriteMaterial, Sprite } from 'three';
 import { gsap } from 'gsap';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { CharacterRegistry } from '../registries/CharacterRegistry.js';
 
 /**
  * NetworkedPlayerManager is responsible for managing all networked players.
@@ -10,6 +12,7 @@ export class NetworkedPlayerManager {
   constructor(scene) {
     this.scene = scene;
     this.players = new Map(); // Map of sessionId -> NetworkedPlayer
+    this.loader = new GLTFLoader();
     
     // Shared resources
     this.initSharedResources();
@@ -30,23 +33,6 @@ export class NetworkedPlayerManager {
     this.nameTagCanvas.width = 256;
     this.nameTagCanvas.height = 64;
     this.nameTagContext = this.nameTagCanvas.getContext('2d');
-    
-    // Create shared geometries
-    this.playerGeometry = new THREE.BoxGeometry(1.2, 2.2, 1.2);
-    this.glowGeometry = new THREE.BoxGeometry(1.3, 2.3, 1.3);
-    
-    // Create shared materials
-    this.playerMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x00ffff,
-      transparent: true,
-      opacity: 0.8
-    });
-    
-    this.glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ffff,
-      transparent: true,
-      opacity: 0.3
-    });
   }
   
   /**
@@ -70,10 +56,7 @@ export class NetworkedPlayerManager {
         playerData, 
         this.scene,
         {
-          playerGeometry: this.playerGeometry,
-          glowGeometry: this.glowGeometry,
-          playerMaterial: this.playerMaterial,
-          glowMaterial: this.glowMaterial,
+          loader: this.loader,
           nameTagCanvas: this.nameTagCanvas,
           nameTagContext: this.nameTagContext
         }
@@ -193,10 +176,7 @@ export class NetworkedPlayerManager {
     this.players.clear();
     
     // Dispose of shared resources
-    this.playerGeometry.dispose();
-    this.glowGeometry.dispose();
-    this.playerMaterial.dispose();
-    this.glowMaterial.dispose();
+    this.nameTagCanvas.dispose();
   }
 }
 
@@ -216,6 +196,9 @@ export class NetworkedPlayer {
     this.sessionId = sessionId;
     this.playerData = playerData || { x: 0, y: 0, z: 0, rotationY: 0 };
     this.resources = resources;
+    
+    // Camera height offset - the main character camera is 2 units above ground
+    this.cameraHeightOffset = 2.0;
     
     // Animation control
     this.currentAnimation = null;
@@ -239,34 +222,109 @@ export class NetworkedPlayer {
     this.currentRotationY = this.targetRotationY;
     
     this.createModel();
-    this.addNameTag(this.playerData.name || "Player");
-    this.startHoverAnimation();
   }
   
   /**
    * Create player model using shared resources
    */
   createModel() {
-    // Use shared geometry and material
-    this.model = new THREE.Mesh(
-      this.resources.playerGeometry, 
-      this.resources.playerMaterial
-    );
+    // Get the model path from CharacterRegistry
+    const modelPath = CharacterRegistry.getModelPath('character-1');
+    if (!modelPath) {
+      console.error('Failed to get character model path');
+      return;
+    }
+
+    // Load the model
+    this.resources.loader.load(modelPath, (gltf) => {
+      this.model = gltf.scene;
+      
+      // Apply scale from registry
+      const characterConfig = CharacterRegistry.items.find(item => item.id === 'character-1');
+      if (characterConfig) {
+        this.model.scale.set(characterConfig.scale, characterConfig.scale, characterConfig.scale);
+      }
+      
+      // Set the model position, adjusting Y for camera height
+      const adjustedPosition = this.currentPosition.clone();
+      
+      // Apply camera height offset - position character at ground level
+      if (Math.abs(adjustedPosition.y) < 0.5) {
+        // For characters on the ground, subtract the full camera height
+        adjustedPosition.y = 0;
+      } else {
+        // For jumping characters, adjust the height by the offset
+        adjustedPosition.y -= this.cameraHeightOffset;
+      }
+      
+      this.model.position.copy(adjustedPosition);
+      this.model.rotation.y = this.currentRotationY;
+      
+      // Add to scene
+      this.scene.add(this.model);
+      
+      // Add a temporary hitbox visualization
+      this.addHitbox();
+      
+      // Now that model is loaded, add the name tag
+      this.addNameTag(this.playerData.name || "Player");
+    }, undefined, (error) => {
+      console.error('Error loading character model:', error);
+    });
+  }
+  
+  /**
+   * Add a visible hitbox around the character
+   */
+  addHitbox() {
+    // Create a wireframe box to represent the hitbox
+    const hitboxGeometry = new THREE.BoxGeometry(0.7, 0.8, 0.7);
+    const hitboxMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      wireframe: true
+    });
     
-    // Add glow effect using shared resources
-    const glowMesh = new THREE.Mesh(
-      this.resources.glowGeometry,
-      this.resources.glowMaterial
-    );
+    this.hitboxMesh = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
     
-    this.model.add(glowMesh);
+    // Position the hitbox slightly higher for better collision detection
+    this.hitboxMesh.position.y = 0.5;
     
-    // Set initial position
-    this.model.position.copy(this.currentPosition);
-    this.model.rotation.y = this.currentRotationY;
+    // Add to the model
+    this.model.add(this.hitboxMesh);
+  }
+  
+  /**
+   * Draw the name tag on the shared canvas
+   */
+  drawNameTag(playerName) {
+    const context = this.resources.nameTagContext;
+    const canvas = this.resources.nameTagCanvas;
     
-    // Add to scene
-    this.scene.add(this.model);
+    // Clear the canvas
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Add a slight background to help with readability against bloom
+    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Simpler text with stroke to make it more readable with bloom
+    context.font = 'bold 32px Arial, Helvetica, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    // Add a text stroke/outline to make it more visible with bloom
+    context.strokeStyle = 'black';
+    context.lineWidth = 4;
+    context.strokeText(playerName, canvas.width / 2, canvas.height / 2);
+    
+    // Fill the text
+    context.fillStyle = 'white';
+    context.fillText(playerName, canvas.width / 2, canvas.height / 2);
+    
+    // Update the texture
+    if (this.nameSprite && this.nameSprite.material.map) {
+      this.nameSprite.material.map.needsUpdate = true;
+    }
   }
   
   /**
@@ -292,8 +350,8 @@ export class NetworkedPlayer {
       
       // Create the sprite
       const nameSprite = new Sprite(material);
-      nameSprite.position.set(0, 2.5, 0); // Position above the player
-      nameSprite.scale.set(2, 0.5, 1);
+      nameSprite.position.set(0, 2.2, 0); // Lower position closer to character
+      nameSprite.scale.set(2.5, 0.6, 1); // Adjust size
       
       // Add the sprite to the player model
       this.model.add(nameSprite);
@@ -301,60 +359,11 @@ export class NetworkedPlayer {
       // Store references
       this.nameSprite = nameSprite;
       this.playerName = playerName;
+      
+      // Debug log to confirm name tag creation
+      console.log(`Created name tag for player: ${playerName}`);
     } catch (error) {
       console.error('Failed to create name tag:', error);
-    }
-  }
-  
-  /**
-   * Draw the name tag on the shared canvas
-   */
-  drawNameTag(playerName) {
-    const context = this.resources.nameTagContext;
-    const canvas = this.resources.nameTagCanvas;
-    
-    // Clear the canvas
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Background with rounded corners
-    const cornerRadius = 10;
-    
-    // Draw rounded rectangle
-    context.beginPath();
-    context.moveTo(cornerRadius, 0);
-    context.lineTo(canvas.width - cornerRadius, 0);
-    context.quadraticCurveTo(canvas.width, 0, canvas.width, cornerRadius);
-    context.lineTo(canvas.width, canvas.height - cornerRadius);
-    context.quadraticCurveTo(canvas.width, canvas.height, canvas.width - cornerRadius, canvas.height);
-    context.lineTo(cornerRadius, canvas.height);
-    context.quadraticCurveTo(0, canvas.height, 0, canvas.height - cornerRadius);
-    context.lineTo(0, cornerRadius);
-    context.quadraticCurveTo(0, 0, cornerRadius, 0);
-    context.closePath();
-    
-    // Fill with gradient
-    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, 'rgba(50, 150, 50, 0.7)');
-    gradient.addColorStop(1, 'rgba(30, 100, 30, 0.7)');
-    context.fillStyle = gradient;
-    context.fill();
-    
-    // Add border
-    context.lineWidth = 2;
-    context.strokeStyle = 'rgba(200, 255, 200, 0.7)';
-    context.stroke();
-    
-    // Draw the text with shadow
-    context.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    context.shadowBlur = 5;
-    context.font = 'bold 24px Arial, Helvetica, sans-serif';
-    context.fillStyle = 'white';
-    context.textAlign = 'center';
-    context.fillText(playerName, canvas.width / 2, canvas.height / 2);
-    
-    // Update the texture
-    if (this.nameSprite && this.nameSprite.material.map) {
-      this.nameSprite.material.map.needsUpdate = true;
     }
   }
   
@@ -362,35 +371,9 @@ export class NetworkedPlayer {
    * Start a subtle hover animation for the player model
    */
   startHoverAnimation() {
-    // We'll use a different approach to handle hover animation
-    // Instead of directly animating the model's Y position, we'll track a hover offset
+    // Removing the hover animation by making this a no-op
+    // The hoverOffset is not needed anymore
     this.hoverOffset = 0;
-    
-    // Create a hover timeline that only updates the offset value, not the actual position
-    this.hoverAnimation = gsap.to(this, {
-      hoverOffset: 0.03, // Small hover amount
-      duration: 2.0,
-      ease: "sine.inOut",
-      yoyo: true,
-      repeat: -1,
-      onUpdate: () => {
-        // Apply the hover offset to the model's position
-        if (this.model) {
-          this.model.position.y = this.currentPosition.y + this.hoverOffset;
-        }
-      }
-    });
-    
-    // Add subtle glow animation if we have a glow mesh
-    if (this.model && this.model.children[0]) {
-      gsap.to(this.model.children[0].material, {
-        opacity: 0.4,
-        duration: 2.2,
-        ease: "sine.inOut",
-        yoyo: true,
-        repeat: -1
-      });
-    }
   }
   
   /**
@@ -458,6 +441,10 @@ export class NetworkedPlayer {
     // Store new target position
     this.targetPosition = newPosition.clone();
     
+    // Handle Y position specially for the network position
+    const isCloseToGround = Math.abs(this.targetPosition.y) < 0.5;
+    const isJumping = !isCloseToGround || this.targetPosition.y > 2.1;
+    
     // Kill existing animation
     if (this.currentAnimation) {
       this.currentAnimation.kill();
@@ -489,19 +476,24 @@ export class NetworkedPlayer {
       );
     }
     
-    // Animate the current position (which is the base position without hover)
+    // Animate the current position
     this.currentAnimation = gsap.to(this.currentPosition, {
       x: predictedPosition.x,
-      y: predictedPosition.y,
+      y: predictedPosition.y, // Keep original Y from server
       z: predictedPosition.z,
       duration: duration,
       ease: ease,
       onUpdate: () => {
-        // Update the actual model position (base position + hover offset)
+        // Update the actual model position with camera height adjustment
         if (this.model) {
           this.model.position.x = this.currentPosition.x;
           this.model.position.z = this.currentPosition.z;
-          this.model.position.y = this.currentPosition.y + this.hoverOffset;
+          
+          // Apply camera height offset for model Y position
+          const modelY = isJumping ? 
+            this.currentPosition.y - this.cameraHeightOffset : 0;
+          
+          this.model.position.y = modelY;
         }
       },
       onComplete: () => {
@@ -510,14 +502,16 @@ export class NetworkedPlayer {
     });
     
     // Animate rotation
-    gsap.to(this.model.rotation, {
-      y: this.targetRotationY,
-      duration: Math.min(duration * 1.2, 0.4),
-      ease: "sine.out",
-      onUpdate: () => {
-        this.currentRotationY = this.model.rotation.y;
-      }
-    });
+    if (this.model) {
+      gsap.to(this.model.rotation, {
+        y: this.targetRotationY,
+        duration: Math.min(duration * 1.2, 0.4),
+        ease: "sine.out",
+        onUpdate: () => {
+          this.currentRotationY = this.model.rotation.y;
+        }
+      });
+    }
   }
   
   /**
@@ -535,14 +529,19 @@ export class NetworkedPlayer {
       // Update the current position (base position)
       this.currentPosition.x += movement.x;
       this.currentPosition.z += movement.z;
-      // Note: we don't update Y with velocity because height changes come from server
+      this.currentPosition.y += movement.y;
       
-      // Apply the change to the model's position (including hover)
+      // Apply the change to the model's position with camera height adjustment
       if (this.model) {
         this.model.position.x = this.currentPosition.x;
         this.model.position.z = this.currentPosition.z;
-        // Y position is base position + hover
-        this.model.position.y = this.currentPosition.y + this.hoverOffset;
+        
+        // Apply camera height offset
+        const isJumping = Math.abs(this.currentPosition.y) > 0.5;
+        const modelY = isJumping ? 
+          this.currentPosition.y - this.cameraHeightOffset : 0;
+          
+        this.model.position.y = modelY;
       }
     }
   }
