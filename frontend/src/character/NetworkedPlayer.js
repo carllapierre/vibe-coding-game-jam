@@ -104,6 +104,27 @@ export class NetworkedPlayerManager {
     
     this.players.clear();
   }
+  
+  /**
+   * Validate players against the provided list of valid IDs
+   * Removes any players that are no longer in the server state
+   * @param {string[]} validPlayerIds - Array of valid player session IDs
+   */
+  validatePlayers(validPlayerIds) {
+    const validIdSet = new Set(validPlayerIds);
+    const playerIds = Object.keys(this.players);
+    
+    // Find and remove any players not in the valid set
+    playerIds.forEach(id => {
+      if (!validIdSet.has(id)) {
+        console.log(`Cleaning up stale player: ${id}`);
+        this.removePlayer(id);
+      }
+    });
+    
+    // Return true if any players were removed
+    return playerIds.length !== Object.keys(this.players).length;
+  }
 }
 
 /**
@@ -276,6 +297,13 @@ export class NetworkedPlayer {
    */
   updateState(state) {
     try {
+      // Log incoming position data for debugging
+      console.log(`Player ${this.sessionId} state update:`, {
+        position: `(${state.x.toFixed(2)}, ${state.y.toFixed(2)}, ${state.z.toFixed(2)})`,
+        rotation: state.rotationY?.toFixed(2),
+        state: state.state
+      });
+      
       // Calculate time since last update
       const now = Date.now();
       const timeDelta = (now - this.lastUpdateTime) / 1000; // in seconds
@@ -288,8 +316,8 @@ export class NetworkedPlayer {
         Number(state.z) || 0
       );
       
-      // Calculate distance to new position
-      const distanceToNewTarget = this.currentPosition.distanceTo(newPosition);
+      // Calculate distance to new target
+      const distanceToNewTarget = this.targetPosition.distanceTo(newPosition);
       
       // Calculate velocity
       if (timeDelta > 0.001 && timeDelta < 1.0 && this.positionBuffer.length > 0) {
@@ -322,8 +350,9 @@ export class NetworkedPlayer {
         this.positionBuffer.shift();
       }
       
-      // Animate to new position
-      this.animateToNewPosition(newPosition, distanceToNewTarget);
+      // Animate to new position - force immediate update for first position
+      const isFirstUpdate = this.positionBuffer.length <= 1;
+      this.animateToNewPosition(newPosition, distanceToNewTarget, isFirstUpdate);
       
       // Update nametag with name
       this.playerData.name = state.name || this.playerData.name;
@@ -335,8 +364,11 @@ export class NetworkedPlayer {
   
   /**
    * Animate the player to a new position
+   * @param {Vector3} newPosition - New target position
+   * @param {number} distance - Distance to new position
+   * @param {boolean} immediate - Whether to update immediately
    */
-  animateToNewPosition(newPosition, distance) {
+  animateToNewPosition(newPosition, distance, immediate = false) {
     // Store new target position
     this.targetPosition = newPosition.clone();
     
@@ -347,6 +379,34 @@ export class NetworkedPlayer {
     // Kill existing animation
     if (this.currentAnimation) {
       this.currentAnimation.kill();
+    }
+    
+    // For the first update or teleportation, update immediately
+    if (immediate || distance > 10) {
+      this.currentPosition.copy(newPosition);
+      
+      if (this.model) {
+        this.model.position.x = newPosition.x;
+        this.model.position.z = newPosition.z;
+        
+        // Apply camera height offset for model Y position
+        const modelY = isJumping ? 
+          newPosition.y - this.cameraHeightOffset : 0;
+        
+        this.model.position.y = modelY;
+        
+        // Update rotation immediately too
+        this.model.rotation.y = this.targetRotationY + (this.modelRotationOffset || 0);
+        this.currentRotationY = this.targetRotationY;
+      }
+      
+      console.log(`Player ${this.sessionId} teleported to:`, {
+        x: newPosition.x.toFixed(2),
+        y: newPosition.y.toFixed(2),
+        z: newPosition.z.toFixed(2)
+      });
+      
+      return;
     }
     
     // Choose animation parameters based on distance

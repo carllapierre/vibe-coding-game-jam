@@ -31,6 +31,9 @@ export class ColyseusManager extends EventEmitter {
   /** @type {string} */
   clientId = generateClientId();
   
+  /** @type {boolean} */
+  _hasSetupPlayerHandlers = false;
+  
   /**
    * Get the singleton instance of ColyseusManager
    * @returns {ColyseusManager}
@@ -92,10 +95,18 @@ export class ColyseusManager extends EventEmitter {
 
     // Wait for the state to be synchronized
     this.room.onStateChange((state) => {
+      // Log state changes for debugging
+      console.log(`Room state change, players: ${state.players ? state.players.size : 0}`);
+      
       // Set up player listeners only after state is synchronized
       if (state && state.players) {
+        // Create a set of current players to track removed ones
+        const currentPlayers = new Set();
+        
         // Handle existing players
         state.players.forEach((player, sessionId) => {
+          currentPlayers.add(sessionId);
+          
           // Skip if it's the local player
           if (sessionId === this.room.sessionId) {
             this.emit('currentPlayer', player);
@@ -103,29 +114,48 @@ export class ColyseusManager extends EventEmitter {
           }
           
           // Add to remote players and emit join event
-          this.remotePlayers[sessionId] = player;
-          this.emit('playerJoined', { sessionId, player });
-          this.setupPlayerListeners(player, sessionId);
+          if (!this.remotePlayers[sessionId]) {
+            console.log(`Adding remote player: ${sessionId}`);
+            this.remotePlayers[sessionId] = player;
+            this.emit('playerJoined', { sessionId, player });
+            this.setupPlayerListeners(player, sessionId);
+          }
+        });
+        
+        // Check for players that have been removed from state but still in remotePlayers
+        Object.keys(this.remotePlayers).forEach(sessionId => {
+          if (!currentPlayers.has(sessionId) && sessionId !== this.room.sessionId) {
+            console.log(`Player ${sessionId} no longer in state, cleaning up`);
+            this.emit('playerLeft', { sessionId, player: this.remotePlayers[sessionId] });
+            delete this.remotePlayers[sessionId];
+          }
         });
         
         // Listen for changes in the players collection
-        state.players.onAdd = (player, sessionId) => {
-          // Skip if it's the local player
-          if (sessionId === this.room.sessionId) {
-            this.emit('currentPlayer', player);
-            return;
-          }
+        // Only set this up once to avoid duplicate handlers
+        if (!this._hasSetupPlayerHandlers) {
+          this._hasSetupPlayerHandlers = true;
           
-          // Add to remote players and emit join event
-          this.remotePlayers[sessionId] = player;
-          this.emit('playerJoined', { sessionId, player });
-          this.setupPlayerListeners(player, sessionId);
-        };
-        
-        state.players.onRemove = (player, sessionId) => {
-          delete this.remotePlayers[sessionId];
-          this.emit('playerLeft', { sessionId, player });
-        };
+          state.players.onAdd = (player, sessionId) => {
+            console.log(`Player added to state: ${sessionId}`);
+            // Skip if it's the local player
+            if (sessionId === this.room.sessionId) {
+              this.emit('currentPlayer', player);
+              return;
+            }
+            
+            // Add to remote players and emit join event
+            this.remotePlayers[sessionId] = player;
+            this.emit('playerJoined', { sessionId, player });
+            this.setupPlayerListeners(player, sessionId);
+          };
+          
+          state.players.onRemove = (player, sessionId) => {
+            console.log(`Player removed from state: ${sessionId}`);
+            delete this.remotePlayers[sessionId];
+            this.emit('playerLeft', { sessionId, player });
+          };
+        }
       }
     });
 
@@ -139,10 +169,51 @@ export class ColyseusManager extends EventEmitter {
     this.room.onLeave((code) => {
       console.log('Left Colyseus room:', code);
       this.emit('disconnected');
+      
+      // Try to reconnect if unexpected disconnect
+      if (code >= 1000 && code < 1003) {
+        // Normal closure, don't reconnect
+        console.log('Normal disconnection, not attempting reconnect');
+      } else {
+        console.log('Unexpected disconnection, attempting reconnect...');
+        // Try to reconnect after a short delay
+        setTimeout(() => {
+          this.reconnect();
+        }, 2000);
+      }
     });
     
     // Set up message handlers for custom events
     this.setupMessageHandlers();
+  }
+  
+  /**
+   * Attempt to reconnect to the server
+   */
+  async reconnect() {
+    try {
+      console.log('Attempting to reconnect to server...');
+      
+      // Only attempt to reconnect if we're not already connected
+      if (this.room) {
+        console.log('Already connected, skipping reconnect');
+        return;
+      }
+      
+      // Connect with the same parameters as before
+      const result = await this.connect('Player', 'character-1');
+      
+      if (result) {
+        console.log('Successfully reconnected to server');
+      }
+    } catch (error) {
+      console.error('Failed to reconnect:', error);
+      
+      // Try again after a delay
+      setTimeout(() => {
+        this.reconnect();
+      }, 5000);
+    }
   }
   
   /**
@@ -155,6 +226,7 @@ export class ColyseusManager extends EventEmitter {
     // Listen for projectile creation events
     this.room.onMessage('projectile', (data) => {
       // Forward to listeners with playerId added
+      console.log(`Received projectile from server, source: ${data.playerId}`);
       this.emit('projectileCreated', {
         ...data,
         playerId: data.playerId // Ensure playerId is passed
@@ -163,11 +235,13 @@ export class ColyseusManager extends EventEmitter {
     
     // Listen for damage events
     this.room.onMessage('damage', (data) => {
+      console.log(`Received damage event from server: target=${data.targetId}, source=${data.sourceId}, amount=${data.amount}`);
       this.emit('playerDamaged', data);
     });
     
     // Listen for player respawn events
     this.room.onMessage('playerRespawned', (data) => {
+      console.log(`Received player respawn event: ${data.playerId}`);
       this.emit('playerRespawned', data);
     });
   }
@@ -182,6 +256,13 @@ export class ColyseusManager extends EventEmitter {
     let changeTimeout = null;
     let positionChanged = false;
     let stateChanged = false;
+    let lastEmitTime = Date.now();
+    
+    // Debugger - log player properties
+    console.log(`Setting up listeners for player ${sessionId}`, {
+      hasListen: typeof player.listen === 'function',
+      properties: Object.keys(player)
+    });
     
     // Function to emit accumulated changes
     const emitChanges = () => {
@@ -196,6 +277,15 @@ export class ColyseusManager extends EventEmitter {
           name: player.name,
           state: player.state
         };
+        
+        // Debug log position changes
+        console.log(`Player ${sessionId} position update:`, {
+          position: `(${player.x.toFixed(2)}, ${player.y.toFixed(2)}, ${player.z.toFixed(2)})`,
+          rotation: player.rotationY.toFixed(2),
+          elapsedMs: Date.now() - lastEmitTime
+        });
+        
+        lastEmitTime = Date.now();
         
         // Emit the change with the full player state
         this.emit('playerChanged', playerState);
@@ -213,13 +303,15 @@ export class ColyseusManager extends EventEmitter {
       // Listen for any position or rotation changes
       ['x', 'y', 'z', 'rotationY'].forEach(prop => {
         player.listen(prop, (newValue, previousValue) => {
-          // Mark as changed
-          positionChanged = true;
-          
-          // Debounce updates to avoid too many events
-          // But not too long to ensure smoothness
-          if (!changeTimeout) {
-            changeTimeout = setTimeout(emitChanges, 16); // ~60fps rate
+          if (Math.abs(newValue - previousValue) > 0.001) {
+            // Mark as changed
+            positionChanged = true;
+            
+            // Debounce updates to avoid too many events
+            // But not too long to ensure smoothness
+            if (!changeTimeout) {
+              changeTimeout = setTimeout(emitChanges, 16); // ~60fps rate
+            }
           }
         });
       });
@@ -227,6 +319,7 @@ export class ColyseusManager extends EventEmitter {
       // Listen for player state changes
       player.listen("state", (newValue, previousValue) => {
         if (newValue !== previousValue) {
+          console.log(`Player ${sessionId} state changed: ${previousValue} -> ${newValue}`);
           stateChanged = true;
           
           if (!changeTimeout) {
@@ -238,6 +331,7 @@ export class ColyseusManager extends EventEmitter {
       // Handle name changes immediately
       player.listen("name", (newValue, previousValue) => {
         if (newValue !== previousValue) {
+          console.log(`Player ${sessionId} name changed: ${previousValue} -> ${newValue}`);
           const playerState = {
             sessionId,
             name: newValue,
@@ -251,6 +345,71 @@ export class ColyseusManager extends EventEmitter {
           this.emit('playerChanged', playerState);
         }
       });
+      
+      // Emit initial state immediately to ensure player appears
+      setTimeout(() => {
+        const playerState = {
+          sessionId,
+          name: player.name,
+          x: player.x,
+          y: player.y,
+          z: player.z,
+          rotationY: player.rotationY,
+          state: player.state
+        };
+        
+        console.log(`Emitting initial state for player ${sessionId}:`, {
+          position: `(${player.x.toFixed(2)}, ${player.y.toFixed(2)}, ${player.z.toFixed(2)})`
+        });
+        
+        this.emit('playerChanged', playerState);
+      }, 50);
+    } else {
+      console.warn(`Player ${sessionId} doesn't have listen method. Using polling instead.`);
+      
+      // Fallback to polling for changes if listen method is not available
+      let lastState = {
+        x: player.x,
+        y: player.y,
+        z: player.z,
+        rotationY: player.rotationY,
+        state: player.state,
+        name: player.name
+      };
+      
+      // Poll for changes every 100ms
+      const pollInterval = setInterval(() => {
+        if (!this.room || !this.remotePlayers[sessionId]) {
+          clearInterval(pollInterval);
+          return;
+        }
+        
+        const hasPositionChanged = 
+          player.x !== lastState.x || 
+          player.y !== lastState.y || 
+          player.z !== lastState.z ||
+          player.rotationY !== lastState.rotationY;
+          
+        const hasStateChanged = player.state !== lastState.state;
+        const hasNameChanged = player.name !== lastState.name;
+        
+        if (hasPositionChanged || hasStateChanged || hasNameChanged) {
+          const playerState = {
+            sessionId,
+            name: player.name,
+            x: player.x,
+            y: player.y,
+            z: player.z,
+            rotationY: player.rotationY,
+            state: player.state
+          };
+          
+          this.emit('playerChanged', playerState);
+          
+          // Update last state
+          lastState = { ...playerState };
+        }
+      }, 100);
     }
   }
   
@@ -318,23 +477,27 @@ export class ColyseusManager extends EventEmitter {
   }
   
   /**
-   * Disconnect from the server
+   * Disconnect from the Colyseus server and clean up
    */
   disconnect() {
+    // Clean up room resources
     if (this.room) {
-      try {
-        this.room.leave();
-      } catch (error) {
-        console.error('Error leaving room:', error);
-      }
+      // Clear all event listeners from the EventEmitter
+      this.removeAllListeners();
+      
+      // Leave the room
+      this.room.leave();
       this.room = null;
     }
     
+    // Clear remote players
+    this.remotePlayers = {};
+    
+    // Close the client if it exists
     if (this.client) {
       this.client = null;
     }
     
-    this.remotePlayers = {};
-    this.emit('disconnected');
+    console.log('Disconnected from Colyseus server');
   }
 } 

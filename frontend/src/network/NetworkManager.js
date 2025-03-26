@@ -452,12 +452,49 @@ export class NetworkManager {
    * @param {number} delta - Time since last frame (in seconds)
    */
   update(delta) {
-    // Update networked players
-    this.playerManager.update(delta);
-    
-    // Update networked projectiles using the static updateAll method
-    if (this.localPlayer) {
-      NetworkedProjectile.updateAll(this.localPlayer);
+    try {
+      // Update remote player animations
+      this.playerManager.update(delta);
+      
+      // Update networked projectiles
+      if (this.isServerReadyForProjectiles) {
+        NetworkedProjectile.updateAll(this.localPlayer);
+      }
+      
+      // Perform periodic garbage collection
+      this.performGarbageCollection();
+    } catch (error) {
+      console.error('Error in NetworkManager.update:', error);
+    }
+  }
+  
+  /**
+   * Perform garbage collection to clean up stale resources
+   * Called periodically from update to ensure cleanup
+   */
+  performGarbageCollection() {
+    // Run garbage collection less frequently (roughly every 5 seconds)
+    if (!this._lastGC || Date.now() - this._lastGC > 5000) {
+      this._lastGC = Date.now();
+      
+      try {
+        // Check for stale remote players
+        if (this.colyseusManager && this.colyseusManager.remotePlayers) {
+          const remotePlayerIds = Object.keys(this.colyseusManager.remotePlayers);
+          
+          // Verify each player in playerManager exists in remotePlayers
+          this.playerManager.validatePlayers(remotePlayerIds);
+          
+          console.log(`GC: ${remotePlayerIds.length} active remote players`);
+        }
+        
+        // Log active projectiles count
+        if (NetworkedProjectile.activeProjectiles) {
+          console.log(`GC: ${NetworkedProjectile.activeProjectiles.length} active projectiles`);
+        }
+      } catch (error) {
+        console.error('Error during garbage collection:', error);
+      }
     }
   }
   
@@ -465,26 +502,47 @@ export class NetworkManager {
    * Clean up resources
    */
   dispose() {
-    // Clear update interval
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
-    
-    // Remove event listeners
-    this.colyseusManager.off('playerJoined', this.onPlayerJoined);
-    this.colyseusManager.off('playerLeft', this.onPlayerLeft);
-    this.colyseusManager.off('playerChanged', this.onPlayerChanged);
-    this.colyseusManager.off('projectileCreated', this.onProjectileCreated);
-    this.colyseusManager.off('playerDamaged', this.onPlayerDamaged);
-    this.colyseusManager.off('playerRespawned', this.onPlayerRespawned);
-    
-    // Dispose of players
-    this.playerManager.dispose();
-    
-    // Clear global reference
-    if (window.networkManager === this) {
-      delete window.networkManager;
+    try {
+      // Clear networking update interval
+      if (this.updateInterval) {
+        clearInterval(this.updateInterval);
+        this.updateInterval = null;
+      }
+      
+      // Force clean up any remaining projectiles
+      if (NetworkedProjectile.activeProjectiles) {
+        NetworkedProjectile.activeProjectiles.forEach(projectile => {
+          if (projectile && projectile.destroy) {
+            projectile.destroy();
+          }
+        });
+        NetworkedProjectile.activeProjectiles = [];
+      }
+      
+      // Dispose of player manager
+      if (this.playerManager) {
+        this.playerManager.dispose();
+      }
+      
+      // Disconnect from server
+      if (this.colyseusManager) {
+        this.colyseusManager.disconnect();
+      }
+      
+      // Remove global reference
+      if (window.networkManager === this) {
+        delete window.networkManager;
+      }
+      
+      // Clear references
+      this.scene = null;
+      this.localPlayer = null;
+      this.isConnected = false;
+      this.sessionId = null;
+      
+      console.log('NetworkManager disposed');
+    } catch (error) {
+      console.error('Error disposing NetworkManager:', error);
     }
   }
 } 

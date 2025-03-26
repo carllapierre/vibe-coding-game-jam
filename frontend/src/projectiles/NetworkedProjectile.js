@@ -8,12 +8,15 @@ import { assetPath } from '../utils/pathHelper.js';
  */
 export class NetworkedProjectile {
     static activeProjectiles = [];
+    static MAX_LIFETIME = 10000; // 10 seconds maximum lifetime
     
     /**
      * Register a networked projectile for tracking
      * @param {NetworkedProjectile} projectile - The projectile to register
      */
     static registerProjectile(projectile) {
+        // Assign a creation timestamp to track lifetime
+        projectile.createdAt = Date.now();
         NetworkedProjectile.activeProjectiles.push(projectile);
     }
     
@@ -22,11 +25,21 @@ export class NetworkedProjectile {
      * @param {Object} localPlayer - The local player to check for collisions
      */
     static updateAll(localPlayer) {
+        const currentTime = Date.now();
+        
         for (let i = NetworkedProjectile.activeProjectiles.length - 1; i >= 0; i--) {
             const projectile = NetworkedProjectile.activeProjectiles[i];
             
             // Skip invalid projectiles
             if (!projectile) {
+                NetworkedProjectile.activeProjectiles.splice(i, 1);
+                continue;
+            }
+            
+            // Force cleanup projectiles that exceed maximum lifetime
+            if (currentTime - projectile.createdAt > NetworkedProjectile.MAX_LIFETIME) {
+                console.log('Forcing cleanup of stale projectile');
+                projectile.destroy();
                 NetworkedProjectile.activeProjectiles.splice(i, 1);
                 continue;
             }
@@ -41,8 +54,16 @@ export class NetworkedProjectile {
             } catch (error) {
                 console.error('Error updating projectile:', error);
                 // Remove problematic projectile
+                if (projectile.destroy) {
+                    projectile.destroy();
+                }
                 NetworkedProjectile.activeProjectiles.splice(i, 1);
             }
+        }
+        
+        // Log the number of active projectiles periodically
+        if (NetworkedProjectile.activeProjectiles.length > 0 && Math.random() < 0.01) {
+            console.log(`Active networked projectiles: ${NetworkedProjectile.activeProjectiles.length}`);
         }
     }
     
