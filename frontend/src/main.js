@@ -16,10 +16,13 @@ import { spawner as spawnerConfig } from './config.js';
 import { NetworkManager } from './network/NetworkManager.js';
 import { initWebGLTracker, logWebGLInfo, getActiveContextCount } from './utils/WebGLTracker.js';
 import sharedRenderer from './utils/SharedRenderer.js';
+import { initializeFromUrlParams, getUsername } from './utils/urlParams.js';
 
 // Initialize WebGL tracking
 initWebGLTracker();
 
+// Initialize URL parameters to get username
+initializeFromUrlParams();
 
 // Add this global variable to track multiple tabs
 const MULTIPLAYER_TAB_ID = `tab_${Math.random().toString(36).substring(2, 15)}`;
@@ -27,7 +30,6 @@ console.log('Tab ID:', MULTIPLAYER_TAB_ID);
 
 // Flag to enable/disable multiplayer (default to disabled to prevent WebGL context issues)
 const ENABLE_MULTIPLAYER = true; // Set to true only when testing multiplayer specifically
-
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -42,7 +44,6 @@ camera.lookAt(0, 3.5, 0);  // Look toward the origin at the same height
 const renderer = sharedRenderer.getMainRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
-
 
 // Detect any Three.js errors
 window.addEventListener('error', function(event) {
@@ -197,10 +198,10 @@ async function initializeMultiplayer(character) {
     if (!networkManager) {
       networkManager = new NetworkManager(scene, character);
       
-      // Try to connect with a random name
-      const randomName = `Player-${Math.floor(Math.random() * 10000)}`;
+      // Use the username from URL params or generate a random one
+      const playerName = getUsername() || `Player-${Math.floor(Math.random() * 10000)}`;
       
-      await networkManager.initialize(randomName, 'character-1');
+      await networkManager.initialize(playerName, 'character-1');
       
       console.log('Multiplayer initialized!');
       
