@@ -101,6 +101,14 @@ export class LobbyRoom extends Room<LobbyState> {
         player.equippedItem = message.itemId;
       }
     });
+    
+    this.onMessage("playerState", (client, message) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player && message.state) {
+        player.state = message.state;
+        console.log(`Player ${client.sessionId} state updated to: ${message.state}`);
+      }
+    });
   }
 
   /**

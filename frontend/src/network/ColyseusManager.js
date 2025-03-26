@@ -184,10 +184,11 @@ export class ColyseusManager extends EventEmitter {
     // Track accumulated changes to reduce update frequency
     let changeTimeout = null;
     let positionChanged = false;
+    let stateChanged = false;
     
     // Function to emit accumulated changes
     const emitChanges = () => {
-      if (positionChanged) {
+      if (positionChanged || stateChanged) {
         // Create a player state object with the sessionId included
         const playerState = {
           sessionId,
@@ -195,7 +196,8 @@ export class ColyseusManager extends EventEmitter {
           y: player.y,
           z: player.z,
           rotationY: player.rotationY,
-          name: player.name
+          name: player.name,
+          state: player.state
         };
         
         // Emit the change with the full player state
@@ -203,6 +205,7 @@ export class ColyseusManager extends EventEmitter {
         
         // Reset flags
         positionChanged = false;
+        stateChanged = false;
       }
       
       changeTimeout = null;
@@ -224,6 +227,17 @@ export class ColyseusManager extends EventEmitter {
         });
       });
       
+      // Listen for player state changes
+      player.listen("state", (newValue, previousValue) => {
+        if (newValue !== previousValue) {
+          stateChanged = true;
+          
+          if (!changeTimeout) {
+            changeTimeout = setTimeout(emitChanges, 16);
+          }
+        }
+      });
+      
       // Handle name changes immediately
       player.listen("name", (newValue, previousValue) => {
         if (newValue !== previousValue) {
@@ -233,7 +247,8 @@ export class ColyseusManager extends EventEmitter {
             x: player.x,
             y: player.y,
             z: player.z,
-            rotationY: player.rotationY
+            rotationY: player.rotationY,
+            state: player.state
           };
           
           this.emit('playerChanged', playerState);
@@ -284,6 +299,16 @@ export class ColyseusManager extends EventEmitter {
     
     console.log(`Sending damage to server: target=${targetId}, amount=${amount}`);
     this.room.send('damage', { targetId, amount });
+  }
+  
+  /**
+   * Send player state to the server
+   * @param {string} state - Player state ('idle', 'walking', 'jumping')
+   */
+  sendPlayerState(state) {
+    if (!this.room) return;
+    
+    this.room.send('playerState', { state });
   }
   
   /**

@@ -12,6 +12,7 @@ export class Player extends Schema {
   @type("string") equippedItem: string = null;
   @type("number") score: number = 0;
   @type("string") clientId: string = null;
+  @type("string") state: string = "idle";
 }
 
 export class LobbyState extends Schema {

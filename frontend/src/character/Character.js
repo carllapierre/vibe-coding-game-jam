@@ -72,6 +72,10 @@ export class Character {
         // Initialize health manager
         this.healthManager = new HealthManager(100);
         
+        // Player state tracking
+        this.playerState = 'idle';
+        this.lastPlayerState = 'idle';
+        
         // Movement variables
         this.moveSpeed = 0.15;
         this.keys = {
@@ -906,6 +910,9 @@ export class Character {
                 
                 // Small upward boost to clear objects more reliably
                 this.camera.position.y += 0.1;
+                
+                // Update player state to jumping
+                this.playerState = 'jumping';
             }
         }
 
@@ -915,6 +922,21 @@ export class Character {
         
         // Check if character is moving horizontally
         this.isMoving = moveForward !== 0 || moveRight !== 0;
+        
+        // Update player state based on movement
+        if (this.velocity.y > 0.01 || !this.canJump) {
+            this.playerState = 'jumping';
+        } else if (this.isMoving) {
+            this.playerState = 'walking';
+        } else {
+            this.playerState = 'idle';
+        }
+        
+        // Send player state updates over network if it changed
+        if (this.playerState !== this.lastPlayerState && window.networkManager && window.networkManager.isConnected) {
+            this.lastPlayerState = this.playerState;
+            window.networkManager.sendPlayerState(this.playerState);
+        }
         
         const potentialPosition = this.camera.position.clone();
         

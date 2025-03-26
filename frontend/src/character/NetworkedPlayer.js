@@ -4,6 +4,7 @@ import { gsap } from 'gsap';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterRegistry } from '../registries/CharacterRegistry.js';
 import { NameTag } from './NameTag.js';
+import { AnimationManager } from './AnimationManager.js';
 
 /**
  * NetworkedPlayerManager is responsible for managing all networked players.
@@ -31,7 +32,6 @@ export class NetworkedPlayerManager {
   addPlayer(sessionId, playerData) {
     // Check if player already exists
     if (this.players.has(sessionId)) {
-      console.warn(`Player ${sessionId} already exists, updating instead`);
       this.updatePlayer(sessionId, playerData);
       return this.players.get(sessionId);
     }
@@ -129,6 +129,7 @@ export class NetworkedPlayer {
     // Animation control
     this.currentAnimation = null;
     this.hoverAnimation = null;
+    this.animationManager = null;
     
     // Motion smoothing properties
     this.velocity = new Vector3(0, 0, 0);
@@ -146,6 +147,9 @@ export class NetworkedPlayer {
     this.currentPosition = new Vector3().copy(this.targetPosition);
     this.targetRotationY = Number(this.playerData.rotationY || 0);
     this.currentRotationY = this.targetRotationY;
+    
+    // Player state (idle, walking, jumping)
+    this.playerState = this.playerData.state || 'idle';
     
     // Create name tag
     this.nameTag = new NameTag();
@@ -195,8 +199,22 @@ export class NetworkedPlayer {
       // Add a temporary hitbox visualization
       this.addHitbox();
       
+      // Log found animations
+      if (gltf.animations && gltf.animations.length > 0) {
+        console.log(`Found ${gltf.animations.length} animations in the model:`);
+        gltf.animations.forEach(anim => {
+          console.log(`- Animation: ${anim.name}, Duration: ${anim.duration.toFixed(2)}s`);
+        });
+      }
+      
+      // Initialize animation manager with the model and animations
+      this.animationManager = new AnimationManager(this.model, gltf.animations);
+      
+      // Set initial animation state
+      this.updateAnimationState(this.playerState);
+      
       // Now that model is loaded, add the name tag
-      this.nameTag.create(this.model, this.playerData.name || "Player");
+      this.updateNameTag();
     }, undefined, (error) => {
       console.error('Error loading character model:', error);
     });
@@ -220,6 +238,31 @@ export class NetworkedPlayer {
     
     // Add to the model
     this.model.add(this.hitboxMesh);
+  }
+  
+  /**
+   * Update the name tag with player name
+   */
+  updateNameTag() {
+    if (!this.nameTag) return;
+    
+    const displayName = this.playerData.name || "Player";
+    
+    if (this.model) {
+      this.nameTag.create(this.model, displayName);
+    }
+  }
+  
+  /**
+   * Update animation state based on player state
+   * @param {string} state - The new player state
+   */
+  updateAnimationState(state) {
+    if (!this.animationManager) return;
+    
+    // Pass the state directly to the animation manager
+    // The animation manager already has mappings for all the possible states
+    this.animationManager.setState(state);
   }
   
   /**
@@ -268,6 +311,12 @@ export class NetworkedPlayer {
         this.targetRotationY = Number(state.rotationY);
       }
       
+      // Update player state if provided
+      if (state.state !== undefined) {
+        this.playerState = state.state;
+        this.updateAnimationState(this.playerState);
+      }
+      
       // Add to position buffer for smoothing
       this.positionBuffer.push(newPosition.clone());
       
@@ -279,10 +328,9 @@ export class NetworkedPlayer {
       // Animate to new position
       this.animateToNewPosition(newPosition, distanceToNewTarget);
       
-      // Update name if needed
-      if (state.name && this.nameTag) {
-        this.nameTag.update(state.name);
-      }
+      // Update nametag with name
+      this.playerData.name = state.name || this.playerData.name;
+      this.updateNameTag();
     } catch (error) {
       console.error('Error updating networked player state:', error);
     }
@@ -372,6 +420,11 @@ export class NetworkedPlayer {
    * Update method for game loop integration
    */
   update(delta = 0.016) {
+    // Update animation mixer if available
+    if (this.animationManager) {
+      this.animationManager.update(delta);
+    }
+    
     // Apply predictive movement between network updates
     if (!this.currentAnimation && this.velocity.lengthSq() > 0.01) {
       // Reduce velocity over time

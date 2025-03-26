@@ -238,6 +238,20 @@ export class NetworkManager {
   }
   
   /**
+   * Send player state over the network
+   * @param {string} state - The player's current state (idle, walking, jumping)
+   */
+  sendPlayerState(state) {
+    if (!this.isConnected) return;
+    
+    try {
+      this.colyseusManager.sendPlayerState(state);
+    } catch (error) {
+      console.error('Error sending player state:', error);
+    }
+  }
+  
+  /**
    * Handle a projectile created by another player
    * @param {Object} data - Projectile data
    */
