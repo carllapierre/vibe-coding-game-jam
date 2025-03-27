@@ -291,7 +291,7 @@ export class FoodProjectile {
             document.body.appendChild(container);
         }
         
-        const words = ['Hit!', 'Oooof!', 'Vibes', 'Gotcha', 'Vibin!']
+        const words = ['Hit!', 'Oooof!', 'Vibes', 'Heck Yeah!', 'Vibin!']
         // Create text-based hitmarker
         const hitmarker = document.createElement('div');
         hitmarker.className = 'hitmarker';
