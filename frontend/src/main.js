@@ -265,93 +265,31 @@ async function initializeWorld() {
     }
 }
 
-// Animation loop with better error handling
+// Animation loop with better error handling and frame rate capping
+const frameRateTarget = 60; // Target 60 FPS
+const frameTimeTarget = 1000 / frameRateTarget; // Target frame time in ms
+
 function animate() {
     try {
         if (!documentHidden) {
+            // Always request next frame immediately to avoid sluggishness
             animationFrameId = requestAnimationFrame(animate);
+            
+            // Calculate current time
+            const now = performance.now();
+            
+            // Calculate delta time with rate limiting for consistency
+            // but don't delay frames which would cause sluggishness
+            const rawDelta = now - (lastFrameTime || now - frameTimeTarget);
+            
+            // Only process a new frame if enough time has elapsed or if it's the first frame
+            if (!lastFrameTime || rawDelta >= 8) { // Allow up to ~120 FPS for smoother experience
+                frameStep(now);
+            }
         } else {
             animationFrameId = null;
             return; // Don't continue rendering when hidden
         }
-
-        // Calculate delta time for smooth animation
-        const currentTime = performance.now();
-        const deltaTime = Math.min(0.1, (currentTime - (lastFrameTime || currentTime)) / 1000);
-        lastFrameTime = currentTime;
-
-        if (worldEditor.isDebugMode) {
-            // Editor view - hide character view
-            characterViewContainer.style.display = 'none';
-            worldEditor.update();
-        } else {
-            // Character view - show character view
-            characterViewContainer.style.display = 'block';
-            character.update(deltaTime);
-            
-            // Update network
-            if (networkManager && networkManager.isConnected) {
-                networkManager.update(deltaTime);
-            }
-        }
-
-        // Get all networked players and add them as collidable objects for projectiles
-        if (networkManager && networkManager.isConnected && networkManager.playerManager) {
-            const playerCollidables = [];
-            
-            // Process each networked player
-            networkManager.playerManager.players.forEach(player => {
-                if (player.model && player.boxMesh) {
-                    // Create a THREE.Box3 from the player's bounding box for quick collision tests
-                    const box = new THREE.Box3().setFromObject(player.boxMesh);
-                    
-                    // Get all meshes from the player model for precise collision
-                    const meshes = [];
-                    player.model.traverse(child => {
-                        if (child.isMesh) {
-                            meshes.push(child);
-                        }
-                    });
-                    
-                    // Only add as collidable if we have meshes
-                    if (meshes.length > 0) {
-                        playerCollidables.push({ 
-                            box, 
-                            meshes,
-                            type: 'player',
-                            player // Reference to the player for potential hit handling
-                        });
-                    }
-                }
-            });
-            
-            // Add the local character to the collidable list
-            if (character && character.boxMesh) {
-                const characterCollisionBox = character.getCollisionBox();
-                // Don't add local character if we're viewing through editor
-                if (!worldEditor.isDebugMode) {
-                    playerCollidables.push(characterCollisionBox);
-                }
-            }
-            
-            // Combine world collidable objects with player collidables
-            const allCollidables = [...collidableObjects, ...playerCollidables];
-            
-            // Update the FoodProjectile collidable objects
-            FoodProjectile.updateCollidableObjects(allCollidables);
-        }
-
-        // Update all projectiles
-        FoodProjectile.updateAll();
-        
-        // Update all hit marker effects
-        HitMarker.update();
-
-        // Update world (including spawners and check for item collection)
-        worldManager.update(character, camera);
-
-        // Render with post-processing effects
-        postProcessing.render();
     } catch (error) {
         console.error('Error in animation loop:', error);
         cancelAnimationFrame(animationFrameId);
@@ -368,6 +306,86 @@ function animate() {
         errorOverlay.textContent = 'Error in game loop: ' + error.message + '. Please refresh.';
         document.body.appendChild(errorOverlay);
     }
+}
+
+// The actual frame update logic, separated from the timing control
+function frameStep(currentTime) {
+    // Calculate delta time for smooth animation
+    const deltaTime = Math.min(0.1, (currentTime - (lastFrameTime || currentTime)) / 1000);
+    lastFrameTime = currentTime;
+
+    if (worldEditor.isDebugMode) {
+        // Editor view - hide character view
+        characterViewContainer.style.display = 'none';
+        worldEditor.update();
+    } else {
+        // Character view - show character view
+        characterViewContainer.style.display = 'block';
+        character.update(deltaTime);
+        
+        // Update network
+        if (networkManager && networkManager.isConnected) {
+            networkManager.update(deltaTime);
+        }
+    }
+
+    // Get all networked players and add them as collidable objects for projectiles
+    if (networkManager && networkManager.isConnected && networkManager.playerManager) {
+        const playerCollidables = [];
+        
+        // Process each networked player
+        networkManager.playerManager.players.forEach(player => {
+            if (player.model && player.boxMesh) {
+                // Create a THREE.Box3 from the player's bounding box for quick collision tests
+                const box = new THREE.Box3().setFromObject(player.boxMesh);
+                
+                // Get all meshes from the player model for precise collision
+                const meshes = [];
+                player.model.traverse(child => {
+                    if (child.isMesh) {
+                        meshes.push(child);
+                    }
+                });
+                
+                // Only add as collidable if we have meshes
+                if (meshes.length > 0) {
+                    playerCollidables.push({ 
+                        box, 
+                        meshes,
+                        type: 'player',
+                        player // Reference to the player for potential hit handling
+                    });
+                }
+            }
+        });
+        
+        // Add the local character to the collidable list
+        if (character && character.boxMesh) {
+            const characterCollisionBox = character.getCollisionBox();
+            // Don't add local character if we're viewing through editor
+            if (!worldEditor.isDebugMode) {
+                playerCollidables.push(characterCollisionBox);
+            }
+        }
+        
+        // Combine world collidable objects with player collidables
+        const allCollidables = [...collidableObjects, ...playerCollidables];
+        
+        // Update the FoodProjectile collidable objects
+        FoodProjectile.updateCollidableObjects(allCollidables);
+    }
+
+    // Update all projectiles
+    FoodProjectile.updateAll();
+    
+    // Update all hit marker effects
+    HitMarker.update();
+
+    // Update world (including spawners and check for item collection)
+    worldManager.update(character, camera);
+
+    // Render with post-processing effects
+    postProcessing.render();
 }
 
 // Start initialization

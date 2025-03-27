@@ -91,17 +91,44 @@ export class PortalObject extends THREE.Group {
      * @param {string} labelText - Text to display
      */
     createLabel(labelText) {
-        // // Create text using troika-three-text
-        // this.label = new Text();
-        // this.label.text = labelText;
-        // this.label.fontSize = 0.2;
-        // this.label.color = 0xffffff;
-        // this.label.anchorX = 'center';
-        // this.label.anchorY = 'top';
-        // this.label.position.set(0, 1, 0.2);
-        // this.label.sync();
+        // Create a canvas texture for the text
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 128;
         
-        // this.add(this.label);
+        // Set the background to transparent
+        context.fillStyle = 'rgba(0, 0, 0, 0)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw text
+        context.font = 'bold 48px Arial';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = '#ffffff';
+        context.fillText(labelText, canvas.width / 2, canvas.height / 2);
+        
+        // Create texture from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        
+        // Create material using the texture
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        
+        // Create a plane geometry for the label
+        const geometry = new THREE.PlaneGeometry(2, 0.5);
+        
+        // Create mesh and add to group
+        this.label = new THREE.Mesh(geometry, material);
+        this.label.position.set(0, 1, 0.2);
+        this.label.userData.canvas = canvas; // Store reference to canvas for updates
+        this.label.userData.text = labelText; // Store current text
+        
+        this.add(this.label);
     }
     
     /**
@@ -110,8 +137,26 @@ export class PortalObject extends THREE.Group {
      */
     updateLabel(newText) {
         if (this.label) {
-            this.label.text = newText;
-            this.label.sync();
+            const canvas = this.label.userData.canvas;
+            if (canvas) {
+                const context = canvas.getContext('2d');
+                
+                // Clear canvas
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw new text
+                context.font = 'bold 48px Arial';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillStyle = '#ffffff';
+                context.fillText(newText, canvas.width / 2, canvas.height / 2);
+                
+                // Update texture
+                this.label.material.map.needsUpdate = true;
+                
+                // Store current text
+                this.label.userData.text = newText;
+            }
         }
     }
 
@@ -276,7 +321,11 @@ export class PortalObject extends THREE.Group {
         
         // Remove the label
         if (this.label) {
-            this.label.dispose();
+            this.label.geometry.dispose();
+            if (this.label.material.map) {
+                this.label.material.map.dispose();
+            }
+            this.label.material.dispose();
         }
     }
 }
