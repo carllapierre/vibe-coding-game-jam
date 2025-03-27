@@ -17,6 +17,7 @@ import { NetworkManager } from './network/NetworkManager.js';
 import { initWebGLTracker, logWebGLInfo, getActiveContextCount } from './utils/WebGLTracker.js';
 import sharedRenderer from './utils/SharedRenderer.js';
 import { initializeFromUrlParams, getUsername } from './utils/urlParams.js';
+import { HitMarker } from './projectiles/HitMarker.js';
 
 // Initialize WebGL tracking
 initWebGLTracker();
@@ -34,6 +35,9 @@ const ENABLE_MULTIPLAYER = true; // Set to true only when testing multiplayer sp
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// Make camera globally accessible for hit markers
+window.camera = camera;
 
 // Set initial camera position and rotation before creating controls
 // Position it at a higher y value and with some z offset to ensure it's facing the right direction
@@ -166,6 +170,9 @@ let collidableObjects = [];
 // Initialize character
 const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
+// Make character globally accessible for projectiles
+window.character = character;
+
 // Create debug manager
 const worldEditor = new EditorCore(scene, camera, renderer, character);
 worldEditor.setWorldManager(worldManager);
@@ -288,8 +295,57 @@ function animate() {
             }
         }
 
+        // Get all networked players and add them as collidable objects for projectiles
+        if (networkManager && networkManager.isConnected && networkManager.playerManager) {
+            const playerCollidables = [];
+            
+            // Process each networked player
+            networkManager.playerManager.players.forEach(player => {
+                if (player.model && player.boxMesh) {
+                    // Create a THREE.Box3 from the player's bounding box for quick collision tests
+                    const box = new THREE.Box3().setFromObject(player.boxMesh);
+                    
+                    // Get all meshes from the player model for precise collision
+                    const meshes = [];
+                    player.model.traverse(child => {
+                        if (child.isMesh) {
+                            meshes.push(child);
+                        }
+                    });
+                    
+                    // Only add as collidable if we have meshes
+                    if (meshes.length > 0) {
+                        playerCollidables.push({ 
+                            box, 
+                            meshes,
+                            type: 'player',
+                            player // Reference to the player for potential hit handling
+                        });
+                    }
+                }
+            });
+            
+            // Add the local character to the collidable list
+            if (character && character.boxMesh) {
+                const characterCollisionBox = character.getCollisionBox();
+                // Don't add local character if we're viewing through editor
+                if (!worldEditor.isDebugMode) {
+                    playerCollidables.push(characterCollisionBox);
+                }
+            }
+            
+            // Combine world collidable objects with player collidables
+            const allCollidables = [...collidableObjects, ...playerCollidables];
+            
+            // Update the FoodProjectile collidable objects
+            FoodProjectile.updateCollidableObjects(allCollidables);
+        }
+
         // Update all projectiles
         FoodProjectile.updateAll();
+        
+        // Update all hit marker effects
+        HitMarker.update();
 
         // Update world (including spawners and check for item collection)
         worldManager.update(character, camera);

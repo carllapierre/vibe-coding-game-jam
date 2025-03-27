@@ -178,6 +178,10 @@ export class NetworkedPlayer {
     // Select a random character ID for this player
     this.characterId = this.getRandomCharacterId();
     
+    // Bounding box
+    this.boundingBox = null;
+    this.boundingBoxSize = new THREE.Vector3(1.5, 3, 1.5); // Default size, will adjust based on model
+    
     this.createModel();
   }
   
@@ -239,6 +243,9 @@ export class NetworkedPlayer {
       // Add to scene
       this.scene.add(this.model);
       
+      // Create bounding box
+      this.createBoundingBox();
+      
       // Log found animations
       if (gltf.animations && gltf.animations.length > 0) {
         gltf.animations.forEach(anim => {
@@ -256,6 +263,51 @@ export class NetworkedPlayer {
     }, undefined, (error) => {
       console.error('Error loading character model:', error);
     });
+  }
+  
+  /**
+   * Create bounding box around the player
+   */
+  createBoundingBox() {
+    if (!this.model) return;
+    
+    try {
+      // Create a visible box helper
+      // First create a basic invisible mesh to serve as the basis for the helper
+      const width = 1.80;  
+      const height = 3.0;
+      const depth = 1.80; 
+      
+      // Create an invisible mesh as the base object
+      const boxGeometry = new THREE.BoxGeometry(width, height, depth);
+      const invisibleMaterial = new THREE.MeshBasicMaterial({ 
+        visible: false 
+      });
+      const boxMesh = new THREE.Mesh(boxGeometry, invisibleMaterial);
+      
+      // Position the mesh
+      boxMesh.position.copy(this.model.position);
+      boxMesh.position.y += height / 2; // Move up by half the height
+      
+      // Create a BoxHelper around the mesh - this makes a clearer wireframe
+      this.boundingBox = new THREE.BoxHelper(boxMesh, 0xff0000);
+      
+      // Make the box helper invisible - only needed for collision detection
+      this.boundingBox.visible = false;
+      this.boundingBox.frustumCulled = false;
+      
+      // Store both the mesh and its dimensions
+      this.boxMesh = boxMesh;
+      this.boundingBoxSize = new THREE.Vector3(width, height, depth);
+      
+      // Add both to the scene
+      this.scene.add(this.boxMesh);
+      this.scene.add(this.boundingBox);
+      
+      console.log(`Created bounding box for player ${this.sessionId}`);
+    } catch (error) {
+      console.error('Error creating bounding box:', error);
+    }
   }
   
   /**
@@ -392,6 +444,9 @@ export class NetworkedPlayer {
         // Update rotation immediately too
         this.model.rotation.y = this.targetRotationY + (this.modelRotationOffset || 0);
         this.currentRotationY = this.targetRotationY;
+        
+        // Update bounding box position
+        this.updateBoundingBoxPosition();
       }
       
       console.log(`Player ${this.sessionId} teleported to:`, {
@@ -447,6 +502,9 @@ export class NetworkedPlayer {
             this.currentPosition.y - this.cameraHeightOffset : 0;
           
           this.model.position.y = modelY;
+          
+          // Update bounding box position
+          this.updateBoundingBoxPosition();
         }
       },
       onComplete: () => {
@@ -525,8 +583,29 @@ export class NetworkedPlayer {
           this.currentPosition.y - this.cameraHeightOffset : 0;
           
         this.model.position.y = modelY;
+        
+        // Update bounding box position
+        this.updateBoundingBoxPosition();
       }
     }
+  }
+  
+  /**
+   * Update the bounding box position to follow the model
+   */
+  updateBoundingBoxPosition() {
+    if (!this.boundingBox || !this.boxMesh || !this.model) return;
+    
+    // Update the position of the helper's mesh
+    this.boxMesh.position.x = this.model.position.x;
+    this.boxMesh.position.z = this.model.position.z;
+    
+    // For Y, position the box so its bottom is at the model's feet
+    const boxHeight = this.boundingBoxSize.y;
+    this.boxMesh.position.y = this.model.position.y + (boxHeight / 2);
+    
+    // Update the helper to match the mesh's new position
+    this.boundingBox.update();
   }
   
   /**
@@ -549,6 +628,21 @@ export class NetworkedPlayer {
       
       if (this.model && this.model.children[0]) {
         gsap.killTweensOf(this.model.children[0].material);
+      }
+      
+      // Remove bounding box
+      if (this.boundingBox) {
+        this.scene.remove(this.boundingBox);
+        this.boundingBox.dispose(); // Remove material and geometry
+        this.boundingBox = null;
+      }
+      
+      // Remove box mesh
+      if (this.boxMesh) {
+        this.scene.remove(this.boxMesh);
+        this.boxMesh.geometry.dispose();
+        this.boxMesh.material.dispose();
+        this.boxMesh = null;
       }
       
       // Remove from scene

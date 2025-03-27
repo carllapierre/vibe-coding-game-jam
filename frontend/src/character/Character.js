@@ -131,6 +131,9 @@ export class Character {
         this.collisionSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         this.scene.add(this.collisionSphere);
         
+        // Create the bounding box for projectile collisions
+        this.createBoundingBox();
+        
         // Initialize movement state
         this.movementState = {
             forward: false,
@@ -653,6 +656,9 @@ export class Character {
         
         // Always process physics regardless of lock state
         this.updatePhysics();
+        
+        // Update bounding box position
+        this.updateBoundingBoxPosition();
         
         // If controls aren't locked, update hand position after physics
         if (!this.enabled || !this.controls.isLocked) {
@@ -1237,6 +1243,84 @@ export class Character {
                 this.lockInProgress = false;
             }, 500);
         }, 100); // Short delay to avoid race conditions
+    }
+
+    /**
+     * Create a bounding box around the character for projectile collision detection
+     */
+    createBoundingBox() {
+        // Create a visible box helper (for debugging, can be made invisible in production)
+        // Create dimensions similar to NetworkedPlayer
+        const width = 1.80;
+        const height = 3.0;
+        const depth = 1.80;
+        
+        // Create an invisible mesh as the base object
+        const boxGeometry = new THREE.BoxGeometry(width, height, depth);
+        const invisibleMaterial = new THREE.MeshBasicMaterial({ 
+            visible: false 
+        });
+        this.boxMesh = new THREE.Mesh(boxGeometry, invisibleMaterial);
+        
+        // Position the mesh to follow camera (will be updated in update method)
+        this.boxMesh.position.copy(this.camera.position);
+        // Adjust Y to center the box on the character (camera is at eye level)
+        this.boxMesh.position.y -= height / 3; 
+        
+        // Create a BoxHelper around the mesh - this makes a wireframe
+        this.boundingBox = new THREE.BoxHelper(this.boxMesh, 0xff0000);
+        
+        // Store the box dimensions
+        this.boundingBoxSize = new THREE.Vector3(width, height, depth);
+        
+        // Make the box and helper invisible in normal gameplay
+        this.boundingBox.visible = false;
+        
+        // Add both to the scene
+        this.scene.add(this.boxMesh);
+        this.scene.add(this.boundingBox);
+        
+        console.log('Created character bounding box for projectile collisions');
+    }
+
+    /**
+     * Update the bounding box position to follow the camera
+     */
+    updateBoundingBoxPosition() {
+        if (!this.boundingBox || !this.boxMesh) return;
+        
+        // Update position to follow camera
+        this.boxMesh.position.x = this.camera.position.x;
+        this.boxMesh.position.z = this.camera.position.z;
+        
+        // For Y, position the box so it extends from feet upward
+        // Camera is at eye level (2 units from ground)
+        const boxHeight = this.boundingBoxSize.y;
+        this.boxMesh.position.y = this.camera.position.y - (boxHeight / 3);
+        
+        // Update the helper
+        this.boundingBox.update();
+    }
+
+    /**
+     * Get meshes that can be used for collision detection
+     * @returns {Array} Array of meshes for collision
+     */
+    getCollisionMeshes() {
+        return [this.boxMesh];
+    }
+
+    /**
+     * Get the bounding box for collision detection
+     * @returns {Object} Object with box and meshes properties
+     */
+    getCollisionBox() {
+        return {
+            box: new THREE.Box3().setFromObject(this.boxMesh),
+            meshes: this.getCollisionMeshes(),
+            type: 'player',
+            isLocalPlayer: true
+        };
     }
 
 } 

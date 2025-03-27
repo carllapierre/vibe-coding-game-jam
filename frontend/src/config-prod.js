@@ -6,7 +6,8 @@
 export const api = {
     // Empty host for production (static deployment)
     host: '',
-    environment: 'production'
+    environment: 'production',
+    multiplayerHost: 'ws://food-vibers.onrender.com' 
 };
 
 // Inventory settings

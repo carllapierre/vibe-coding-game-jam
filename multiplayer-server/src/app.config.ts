@@ -1,6 +1,7 @@
 import config from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
 import { playground } from "@colyseus/playground";
+import cors from "cors";
 
 /**
  * Import your Room files
@@ -18,6 +19,16 @@ export default config({
     },
 
     initializeExpress: (app) => {
+        /**
+         * Configure CORS
+         */
+        app.use(cors({
+            origin: ['http://localhost:8080', 'https://food-vibers.onrender.com', 'play.foodvibers.com', 'foodvibers.netlify.app'],
+            methods: ['GET', 'POST', 'OPTIONS'],
+            credentials: true,
+            optionsSuccessStatus: 204
+        }));
+
         /**
          * Bind your custom express routes here:
          * Read more: https://expressjs.com/en/starter/basic-routing.html

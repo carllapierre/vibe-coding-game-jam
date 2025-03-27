@@ -1,8 +1,9 @@
 import { Client } from 'colyseus.js';
 import { EventEmitter } from '../utils/EventEmitter.js';
+import { api } from '../config.js';
 
 // Constants
-const COLYSEUS_SERVER_URL = 'ws://localhost:2567';
+const COLYSEUS_SERVER_URL = api.multiplayerHost;
 
 /**
  * Generate a unique client ID for this browser tab
