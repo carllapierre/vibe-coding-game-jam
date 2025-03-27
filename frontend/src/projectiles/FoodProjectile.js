@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { HitMarker } from './HitMarker.js';
 
 export class FoodProjectile {
     static activeProjectiles = [];
@@ -136,23 +137,83 @@ export class FoodProjectile {
         const raycaster = new THREE.Raycaster();
         
         // Check collision with each collidable object's meshes
-        const hasCollision = FoodProjectile.collidableObjects.some(obj => {
+        let collision = null;
+        for (const obj of FoodProjectile.collidableObjects) {
             // First do a quick bounding box check
             if (!obj.box.intersectsSphere(projectileSphere)) {
-                return false;
+                continue;
             }
             
             // If the bounding box intersects, do precise mesh collision detection
-            return obj.meshes.some(mesh => {
+            for (const mesh of obj.meshes) {
                 raycaster.set(this.model.position, this.velocity.clone().normalize());
                 const intersects = raycaster.intersectObject(mesh);
-                return intersects.some(intersect => intersect.distance < this.velocity.length());
-            });
-        });
+                
+                if (intersects.some(intersect => intersect.distance < this.velocity.length())) {
+                    // We found a collision
+                    collision = {
+                        object: obj,
+                        position: this.model.position.clone()
+                    };
+                    break;
+                }
+            }
+            
+            if (collision) break;
+        }
 
-        if (hasCollision) {
-            // Create particle effect at the current position before destroying
+        if (collision) {
+            // Create the appropriate hit marker effect based on what was hit
+            if (collision.object.type === 'player') {
+                if (collision.object.player) {
+                    console.log('Hit networked player:', collision.object.player.sessionId);
+                    
+                    // Create a 3D hit marker at the collision point
+                    HitMarker.create({
+                        scene: this.scene,
+                        position: this.model.position.clone(),
+                        type: 'player',
+                        color: 0xff3333, // Red color for player hits
+                        camera: window.camera // Pass the main camera
+                    });
+                    
+                    // Enhance UI hit marker to make sure it's visible
+                    this.showUiHitmarker();
+                    
+                    // We could add player hit effects or damage here for networked players
+                    // Example: collision.object.player.onHit(this);
+                } 
+                else if (collision.object.isLocalPlayer) {
+                    console.log('Hit local player!');
+                    
+                    // If we hit the local character, trigger health reduction
+                    // Get the main character instance from window
+                    const mainCharacter = window.character || character;
+                    
+                    if (mainCharacter && mainCharacter.healthManager) {
+                        // Standard damage amount (could be customized based on projectile type)
+                        const damageAmount = 5;
+                        
+                        // Apply damage to the local player
+                        mainCharacter.healthManager.removeHealth(damageAmount);
+                        
+                        // Visual hit effect
+                        this.createPlayerHitEffect();
+                    }
+                }
+            } else {
+                // Environment hit
+                HitMarker.create({
+                    scene: this.scene,
+                    position: this.model.position.clone(),
+                    type: 'environment',
+                    camera: window.camera
+                });
+            }
+            
+            // Still create the particle effect
             this.createParticleEffect(this.model.position);
+            
             this.destroy();
             return;
         }
@@ -177,6 +238,170 @@ export class FoodProjectile {
                     child.material.dispose();
                 }
             });
+        }
+    }
+
+    /**
+     * Create a red flash effect when player is hit
+     */
+    createPlayerHitEffect() {
+        // Create a full-screen flash overlay
+        const hitOverlay = document.createElement('div');
+        hitOverlay.style.position = 'fixed';
+        hitOverlay.style.top = '0';
+        hitOverlay.style.left = '0';
+        hitOverlay.style.width = '100%';
+        hitOverlay.style.height = '100%';
+        hitOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+        hitOverlay.style.pointerEvents = 'none';
+        hitOverlay.style.zIndex = '1000';
+        hitOverlay.style.opacity = '0.7';
+        
+        // Add to document
+        document.body.appendChild(hitOverlay);
+        
+        // Fade out and remove
+        setTimeout(() => {
+            hitOverlay.style.transition = 'opacity 0.5s ease-out';
+            hitOverlay.style.opacity = '0';
+            
+            // Remove from DOM after fade completes
+            setTimeout(() => {
+                document.body.removeChild(hitOverlay);
+            }, 500);
+        }, 50);
+    }
+
+    /**
+     * Show a UI hitmarker in the center of the screen
+     */
+    showUiHitmarker() {
+        // Create container if it doesn't exist
+        let container = document.getElementById('hitmarker-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'hitmarker-container';
+            container.style.position = 'fixed';
+            container.style.top = '0';
+            container.style.left = '0';
+            container.style.width = '100%';
+            container.style.height = '100%';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = '10000'; // Very high z-index to ensure visibility
+            document.body.appendChild(container);
+        }
+        
+        // Create text-based hitmarker
+        const hitmarker = document.createElement('div');
+        hitmarker.className = 'hitmarker';
+        hitmarker.style.position = 'absolute';
+        hitmarker.style.color = '#ff3333';
+        hitmarker.style.fontFamily = 'Arial, sans-serif';
+        hitmarker.style.fontSize = '16px';
+        hitmarker.style.fontWeight = 'bold';
+        hitmarker.style.textShadow = '0 0 3px rgba(0, 0, 0, 0.7)';
+        hitmarker.style.userSelect = 'none';
+        hitmarker.textContent = 'HIT!';
+        
+        // Position in random location near center
+        // Get viewport dimensions
+        const vpWidth = window.innerWidth;
+        const vpHeight = window.innerHeight;
+        
+        // Center coordinates
+        const centerX = vpWidth / 2;
+        const centerY = vpHeight / 2;
+        
+        // Random offset from center (limited to a small area around crosshair)
+        const offsetX = (Math.random() - 0.5) * 100; // +/- 50px from center
+        const offsetY = (Math.random() - 0.5) * 100; // +/- 50px from center
+        
+        // Set position
+        hitmarker.style.left = `${centerX + offsetX}px`;
+        hitmarker.style.top = `${centerY + offsetY}px`;
+        hitmarker.style.transform = 'translate(-50%, -50%)'; // Center the text on its position
+        
+        // Add to container
+        container.appendChild(hitmarker);
+        
+        // Animate the hitmarker
+        setTimeout(() => {
+            // Random slight rotation for dynamic feel
+            const randomRotation = (Math.random() - 0.5) * 10; // +/- 5 degrees
+            
+            hitmarker.style.transition = 'all 0.15s ease-out';
+            hitmarker.style.transform = `translate(-50%, -50%) scale(1.5) rotate(${randomRotation}deg)`;
+            hitmarker.style.opacity = '1';
+            
+            // Then fade out
+            setTimeout(() => {
+                hitmarker.style.transition = 'all 0.5s ease-in';
+                hitmarker.style.opacity = '0';
+                hitmarker.style.transform = `translate(-50%, -50%) scale(1) rotate(${randomRotation}deg)`;
+                
+                // Remove after animation
+                setTimeout(() => {
+                    if (container.contains(hitmarker)) {
+                        container.removeChild(hitmarker);
+                    }
+                    
+                    // Remove container if empty
+                    if (container.children.length === 0) {
+                        if (document.body.contains(container)) {
+                            document.body.removeChild(container);
+                        }
+                    }
+                }, 500);
+            }, 200);
+        }, 0);
+        
+        // Show a second "Hit!" for visual emphasis (staggered timing)
+        if (Math.random() > 0.5) { // 50% chance for a second hit marker
+            setTimeout(() => {
+
+                const words = ['Hit!', 'Oooof!', 'Vibes', 'Gotcha', 'Vibin!']
+
+                // Create a second hit marker
+                const secondHit = document.createElement('div');
+                secondHit.className = 'hitmarker';
+                secondHit.style.position = 'absolute';
+                secondHit.style.color = '#ff5555'; // Slightly lighter red
+                secondHit.style.fontFamily = 'Arial, sans-serif';
+                secondHit.style.fontSize = '16px';
+                secondHit.style.fontWeight = 'bold';
+                secondHit.style.textShadow = '0 0 3px rgba(0, 0, 0, 0.7)';
+                secondHit.style.userSelect = 'none';
+                secondHit.textContent = words[Math.floor(Math.random() * words.length)];
+                
+                // Different random position
+                const offset2X = (Math.random() - 0.5) * 120; // Wider spread
+                const offset2Y = (Math.random() - 0.5) * 120;
+                
+                secondHit.style.left = `${centerX + offset2X}px`;
+                secondHit.style.top = `${centerY + offset2Y}px`;
+                secondHit.style.transform = 'translate(-50%, -50%)';
+                secondHit.style.opacity = '0.8'; // Start slightly more transparent
+                
+                container.appendChild(secondHit);
+                
+                // Animate with different timing
+                const randomRotation2 = (Math.random() - 0.8) * 15; // More rotation
+                
+                secondHit.style.transition = 'all 0.2s ease-out';
+                secondHit.style.transform = `translate(-50%, -50%) scale(1.3) rotate(${randomRotation2}deg)`;
+                
+                setTimeout(() => {
+                    secondHit.style.transition = 'all 0.4s ease-in';
+                    secondHit.style.opacity = '0';
+                    secondHit.style.transform = `translate(-50%, -50%) scale(0.9) rotate(${randomRotation2}deg)`;
+                    
+                    setTimeout(() => {
+                        if (container.contains(secondHit)) {
+                            container.removeChild(secondHit);
+                        }
+                    }, 400);
+                }, 150);
+            }, 70); // Slight delay from the first hit
         }
     }
 } 

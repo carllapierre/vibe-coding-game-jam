@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { assetPath } from '../utils/pathHelper.js';
+import sharedRenderer from '../utils/SharedRenderer.js';
 
 export class Hotbar {
     constructor(inventory, _itemRegistry) {
@@ -8,8 +9,12 @@ export class Hotbar {
         this.itemRegistry = _itemRegistry;
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
-        this.slotPreviewRenderers = [];
         this.slotModels = new Array(9).fill(null);  // Store models for each slot
+        this.slotImages = new Array(9).fill(null);  // Store image elements
+        
+        // Track which slot is currently being rendered (for animation)
+        this.currentlyRendering = -1;
+        this.animationFrameId = null;
         
         // Register for amount updates
         this.inventory.setAmountChangeCallback((index, amount) => {
@@ -70,7 +75,7 @@ export class Hotbar {
             `;
             slot.appendChild(slotNumber);
 
-            // Create preview canvas
+            // Create preview container with img element
             const previewContainer = document.createElement('div');
             previewContainer.style.cssText = `
                 width: 100%;
@@ -80,12 +85,28 @@ export class Hotbar {
                 left: 0;
             `;
             
-            // Setup Three.js for this slot
+            // Create an img element to hold the rendered output
+            const previewImg = document.createElement('img');
+            previewImg.style.cssText = `
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            `;
+            
+            // Initialize with empty slot (hidden img)
+            if (!slotData.item) {
+                previewImg.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+                previewImg.style.display = 'none';
+            }
+            
+            previewContainer.appendChild(previewImg);
+            
+            // Store the image element for later updates
+            this.slotImages[i] = previewImg;
+            
+            // Setup Three.js scene for this slot
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ alpha: true });
-            renderer.setSize(64, 64);
-            previewContainer.appendChild(renderer.domElement);
             
             // Add lighting to the preview
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -120,7 +141,6 @@ export class Hotbar {
             // Store the Three.js objects
             this.slotPreviewScenes.push(scene);
             this.slotPreviewCameras.push(camera);
-            this.slotPreviewRenderers.push(renderer);
         });
 
         // Add wheel listener for scrolling through slots
@@ -132,19 +152,82 @@ export class Hotbar {
             }
         });
 
+        // Start a single animation loop for the selected slot
+        this.animateSelectedSlot();
+        
         this.update();
+    }
+    
+    // Shared animation loop for all slots
+    animateSelectedSlot() {
+        // Track which frame we're on to spread out rendering of non-selected slots
+        let frameCount = 0;
+        
+        const animate = () => {
+            this.animationFrameId = requestAnimationFrame(animate);
+            frameCount++;
+            
+            // Always render the selected slot on every frame for smooth animation
+            const selectedIndex = this.inventory.selectedSlot;
+            
+            if (this.slotModels[selectedIndex]) {
+                // Rotate all models to maintain consistency when switching slots
+                this.slotModels.forEach(model => {
+                    if (model) model.rotation.y += 0.01;
+                });
+                
+                // Render the selected slot
+                sharedRenderer.renderToImage(
+                    this.slotPreviewScenes[selectedIndex],
+                    this.slotPreviewCameras[selectedIndex],
+                    this.slotImages[selectedIndex],
+                    64,
+                    64
+                );
+            }
+            
+            // Every 30 frames (about 0.5 seconds), render one non-selected slot with an item
+            // This ensures all slots get rendered periodically without overloading the renderer
+            if (frameCount % 30 === 0) {
+                // Find which slot to render next
+                const slotToRender = (frameCount / 30) % this.slotModels.length;
+                
+                // Only render if it's not the selected slot and has a model
+                if (slotToRender !== selectedIndex && this.slotModels[slotToRender]) {
+                    sharedRenderer.renderToImage(
+                        this.slotPreviewScenes[slotToRender],
+                        this.slotPreviewCameras[slotToRender],
+                        this.slotImages[slotToRender],
+                        64,
+                        64
+                    );
+                }
+            }
+        };
+        
+        // Start the animation loop
+        animate();
     }
 
     updateSlot(index) {
         const slot = this.container.children[index];
         const itemData = this.inventory.getSlot(index);
         const itemConfig = this.itemRegistry.getType(itemData.item);
+        
         // Update amount display
         const amountDisplay = slot.children[2];
         amountDisplay.textContent = itemData.amount || '';
-
+        
+        // Get the image element
+        const slotImg = this.slotImages[index];
+        
         // Update preview
         if (itemConfig) {
+            // Make sure the image is visible when there's an item
+            if (slotImg) {
+                slotImg.style.display = 'block';
+            }
+            
             if (!this.slotModels[index]) {
                 // Load new model
                 this.loader.load(assetPath(`objects/${itemConfig.model}`), (gltf) => {
@@ -160,17 +243,26 @@ export class Hotbar {
                     
                     scene.add(model);
                     this.slotModels[index] = model;
-
-                    // Start animation
-                    const animate = () => {
-                        if (this.slotModels[index] === model) {  // Only animate if this is still the current model
-                            requestAnimationFrame(animate);
-                            model.rotation.y += 0.01;
-                            this.slotPreviewRenderers[index].render(scene, this.slotPreviewCameras[index]);
-                        }
-                    };
-                    animate();
+                    
+                    // Always render immediately when a new item is loaded
+                    sharedRenderer.renderToImage(
+                        scene,
+                        this.slotPreviewCameras[index],
+                        slotImg,
+                        64,
+                        64
+                    );
                 });
+            } else {
+                // Render this slot immediately since it has an item
+                // This ensures items are visible without waiting for the animation loop
+                sharedRenderer.renderToImage(
+                    this.slotPreviewScenes[index],
+                    this.slotPreviewCameras[index],
+                    slotImg,
+                    64,
+                    64
+                );
             }
         } else {
             // Clear model if slot is empty
@@ -179,7 +271,12 @@ export class Hotbar {
                 scene.remove(this.slotModels[index]);
                 this.slotModels[index] = null;
             }
-            this.slotPreviewRenderers[index].render(scene, this.slotPreviewCameras[index]);
+            
+            // Clear the image for empty slots
+            if (slotImg) {
+                slotImg.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; // Transparent 1x1 pixel
+                slotImg.style.display = 'none'; // Hide the image for empty slots
+            }
         }
 
         // Update selection highlight
@@ -193,5 +290,26 @@ export class Hotbar {
         for (let i = 0; i < slots.length; i++) {
             this.updateSlot(i);
         }
+    }
+    
+    // Clean up resources
+    dispose() {
+        // Cancel animation frame
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        
+        // Clean up models
+        this.slotModels.forEach((model, index) => {
+            if (model) {
+                this.slotPreviewScenes[index].remove(model);
+            }
+        });
+        
+        this.slotPreviewScenes = [];
+        this.slotPreviewCameras = [];
+        this.slotImages = [];
+        this.slotModels = [];
     }
 } 

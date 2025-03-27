@@ -263,12 +263,21 @@ export class Spawnable {
                 itemId: this.itemConfig.id
             };
 
-            this.itemConfig.onCollect(player, collectionData);
+            try {
+                this.itemConfig.onCollect(player, collectionData);
+            } catch (error) {
+                console.error('Error in onCollect handler:', error);
+                // Continue with animation even if the callback fails
+            }
         }
         
         // Start collection animation/effects
         this.startCollectionAnimation().then(() => {
             // Clean up after animation completes
+            this.cleanup();
+        }).catch(error => {
+            console.error('Error during collection animation:', error);
+            // Force cleanup anyway to prevent stuck items
             this.cleanup();
         });
     }
@@ -375,8 +384,14 @@ export class Spawnable {
         if (this.scene) {
             this.collectionParticles.forEach(particle => {
                 this.scene.remove(particle);
-                particle.geometry.dispose();
-                particle.material.dispose();
+                if (particle.geometry) particle.geometry.dispose();
+                if (particle.material) {
+                    if (Array.isArray(particle.material)) {
+                        particle.material.forEach(mat => mat.dispose());
+                    } else {
+                        particle.material.dispose();
+                    }
+                }
             });
         }
         this.collectionParticles = [];
@@ -388,55 +403,79 @@ export class Spawnable {
     }
 
     cleanup() {
-        if (this.scene) {
+        if (!this.scene) return; // Already cleaned up
+
+        try {
             // Remove model and dispose its resources
             if (this.model) {
                 this.scene.remove(this.model);
                 this.model.traverse((child) => {
                     if (child.isMesh) {
-                        child.geometry.dispose();
-                        child.material.dispose();
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(mat => {
+                                    if (mat.map) mat.map.dispose();
+                                    mat.dispose();
+                                });
+                            } else {
+                                if (child.material.map) child.material.map.dispose();
+                                child.material.dispose();
+                            }
+                        }
                     }
                 });
+                this.model = null;
             }
 
             // Remove glow light
             if (this.glowLight) {
                 this.scene.remove(this.glowLight);
+                this.glowLight = null;
             }
 
             // Remove glow mesh and dispose its resources
             if (this.glowMesh) {
                 this.scene.remove(this.glowMesh);
-                this.glowMesh.geometry.dispose();
-                this.glowMesh.material.dispose();
+                if (this.glowMesh.geometry) this.glowMesh.geometry.dispose();
+                if (this.glowMesh.material) {
+                    if (this.glowMesh.material.map) this.glowMesh.material.map.dispose();
+                    this.glowMesh.material.dispose();
+                }
+                this.glowMesh = null;
             }
 
             // Remove shadow mesh and dispose its resources
             if (this.shadowMesh) {
                 this.scene.remove(this.shadowMesh);
-                this.shadowMesh.geometry.dispose();
-                this.shadowMesh.material.dispose();
+                if (this.shadowMesh.geometry) this.shadowMesh.geometry.dispose();
+                if (this.shadowMesh.material) {
+                    if (this.shadowMesh.material.map) this.shadowMesh.material.map.dispose();
+                    this.shadowMesh.material.dispose();
+                }
+                this.shadowMesh = null;
             }
 
             // Remove particles and dispose their resources
             if (this.particles) {
                 this.scene.remove(this.particles);
-                this.particles.geometry.dispose();
-                this.particles.material.dispose();
+                if (this.particles.geometry) this.particles.geometry.dispose();
+                if (this.particles.material) this.particles.material.dispose();
                 this.particles = null;
             }
 
             // Clean up collection particles
             this.cleanupCollectionParticles();
+            
+            // Force garbage collection hint
+            if (window.gc) window.gc();
+        } catch (error) {
+            console.error('Error during cleanup:', error);
         }
 
         // Clear references
         this.scene = null;
-        this.model = null;
-        this.glowLight = null;
-        this.glowMesh = null;
-        this.shadowMesh = null;
         this.isCollected = true;
+        this.isDespawned = true;
     }
 } 

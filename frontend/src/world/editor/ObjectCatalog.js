@@ -5,6 +5,7 @@ import { SpawnerRegistry } from '../../registries/SpawnerRegistry.js';
 import { PortalRegistry } from '../../registries/PortalRegistry.js';
 import { getPositionInFrontOfCamera } from '../../utils/SceneUtils.js';
 import { showFeedback } from '../../utils/UIUtils.js';
+import sharedRenderer from '../../utils/SharedRenderer.js';
 
 /**
  * Handles the object catalog UI for the editor
@@ -29,14 +30,6 @@ export class ObjectCatalog {
         this.isCatalogOpen = false;
         this.previewsLoaded = false;
         this.previewModels = {};
-        
-        // Create preview renderer
-        this.previewRenderer = new THREE.WebGLRenderer({ 
-            alpha: true, 
-            antialias: true 
-        });
-        this.previewRenderer.setSize(130, 80);
-        this.previewRenderer.setClearColor(0x000000, 0);
         
         this.createCatalog();
     }
@@ -677,25 +670,7 @@ export class ObjectCatalog {
         // Set loaded flag to prevent duplicate loading
         this.previewsLoaded = true;
         
-        // Create canvas once for all previews to improve performance
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 120;
-        
         try {
-            const renderer = new THREE.WebGLRenderer({ 
-                canvas,
-                alpha: true, 
-                antialias: true 
-            });
-            renderer.setClearColor(0x000000, 0);
-            renderer.setSize(200, 120);
-            
-            // Common lights for all previews
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(5, 10, 7);
-                
             // Load model previews one by one
             for (const item of ObjectRegistry.items) {
                 try {
@@ -708,8 +683,13 @@ export class ObjectCatalog {
                     
                     // Create a new scene for this preview
                     const scene = new THREE.Scene();
-                    scene.add(ambientLight.clone());
-                    scene.add(directionalLight.clone());
+                    
+                    // Add lighting
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(5, 10, 7);
+                    scene.add(ambientLight);
+                    scene.add(directionalLight);
                     
                     // Create a camera for this preview
                     const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
@@ -742,12 +722,12 @@ export class ObjectCatalog {
                                     );
                                     camera.lookAt(center);
                                     
-                                    // Render and create image
-                                    renderer.render(scene, camera);
-                                    
-                                    // Create a new image from canvas
+                                    // Create a new image element
                                     const img = document.createElement('img');
-                                    img.src = canvas.toDataURL('image/png');
+                                    
+                                    // Use the shared renderer to render the scene
+                                    sharedRenderer.renderToImage(scene, camera, img, 200, 120);
+                                    
                                     img.style.cssText = `
                                         width: 100%;
                                         height: 100%;
@@ -757,6 +737,19 @@ export class ObjectCatalog {
                                     // Clear container and add image
                                     previewContainer.innerHTML = '';
                                     previewContainer.appendChild(img);
+                                    
+                                    // Clean up to avoid memory leaks
+                                    scene.remove(model);
+                                    model.traverse(child => {
+                                        if (child.geometry) child.geometry.dispose();
+                                        if (child.material) {
+                                            if (Array.isArray(child.material)) {
+                                                child.material.forEach(material => material.dispose());
+                                            } else {
+                                                child.material.dispose();
+                                            }
+                                        }
+                                    });
                                     
                                     resolve();
                                 } catch (error) {
@@ -797,10 +790,6 @@ export class ObjectCatalog {
     dispose() {
         if (this.catalogContainer && this.catalogContainer.parentNode) {
             this.catalogContainer.parentNode.removeChild(this.catalogContainer);
-        }
-        
-        if (this.previewRenderer) {
-            this.previewRenderer.dispose();
         }
     }
 } 

@@ -13,20 +13,69 @@ import { addInventory } from './spawners/collect-functions/addInventory.js';
 import { consumeItem } from './spawners/collect-functions/consumeItem.js';
 import { PostProcessingComposer } from './composers/PostProcessingComposer.js';
 import { spawner as spawnerConfig } from './config.js';
-import { api } from './config.js';
+import { NetworkManager } from './network/NetworkManager.js';
+import { initWebGLTracker, logWebGLInfo, getActiveContextCount } from './utils/WebGLTracker.js';
+import sharedRenderer from './utils/SharedRenderer.js';
+import { initializeFromUrlParams, getUsername } from './utils/urlParams.js';
+import { HitMarker } from './projectiles/HitMarker.js';
+
+// Initialize WebGL tracking
+initWebGLTracker();
+
+// Initialize URL parameters to get username
+initializeFromUrlParams();
+
+// Add this global variable to track multiple tabs
+const MULTIPLAYER_TAB_ID = `tab_${Math.random().toString(36).substring(2, 15)}`;
+console.log('Tab ID:', MULTIPLAYER_TAB_ID);
+
+// Flag to enable/disable multiplayer (default to disabled to prevent WebGL context issues)
+const ENABLE_MULTIPLAYER = true; // Set to true only when testing multiplayer specifically
 
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// Make camera globally accessible for hit markers
+window.camera = camera;
 
 // Set initial camera position and rotation before creating controls
 // Position it at a higher y value and with some z offset to ensure it's facing the right direction
 camera.position.set(3, 3, 8);  // Start at z=10 looking toward negative z
 camera.lookAt(0, 3.5, 0);  // Look toward the origin at the same height
 
-const renderer = new THREE.WebGLRenderer();
+// Use the shared renderer service instead of creating a new one
+const renderer = sharedRenderer.getMainRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+
+// Detect any Three.js errors
+window.addEventListener('error', function(event) {
+  console.error('Global error caught:', event.error || event.message);
+  
+  // Check if it's a THREE.js related error
+  if (event.error && (
+    event.error.toString().includes('THREE') ||
+    event.error.stack && event.error.stack.includes('three.module.js')
+  )) {
+    console.error('THREE.js error detected:', event.error);
+  }
+});
+
+// Track tab visibility state
+let documentHidden = false;
+let animationFrameId = null;
+let lastFrameTime = null;
+
+// Add page visibility change handler
+document.addEventListener('visibilitychange', function() {
+  documentHidden = document.hidden;
+  
+  if (!documentHidden && !animationFrameId) {
+    console.log('Tab became visible, resuming animation loop');
+    animationFrameId = requestAnimationFrame(animate);
+  }
+});
 
 // Initialize post-processing
 const postProcessing = new PostProcessingComposer(renderer, scene, camera, {
@@ -121,6 +170,9 @@ let collidableObjects = [];
 // Initialize character
 const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
+// Make character globally accessible for projectiles
+window.character = character;
+
 // Create debug manager
 const worldEditor = new EditorCore(scene, camera, renderer, character);
 worldEditor.setWorldManager(worldManager);
@@ -137,21 +189,197 @@ inventory.onSelectionChange = (selectedIndex, selectedItem) => {
     character.updatePreviewModel();
 };
 
-// Load the world after all registries are initialized
-async function initializeWorld() {
-    // Load all objects from the world
-    await worldManager.loadObjects();
-    collidableObjects = worldManager.getCollidableObjects();
-    // Update character's collidable objects reference
-    character.collidableObjects = collidableObjects;
-    // Update FoodProjectile's static collidable objects
-    FoodProjectile.updateCollidableObjects(collidableObjects);
-    // Initialize spawners after objects are loaded
-    await worldManager.initializeSpawners(character);
+// Reference to store the network manager
+let networkManager = null;
+
+// Call this from the initializeMultiplayer function
+async function initializeMultiplayer(character) {
+  try {
+    console.log('Initializing multiplayer...');
+    
+    if (!ENABLE_MULTIPLAYER) {
+      console.log('Multiplayer is disabled. Set ENABLE_MULTIPLAYER = true to enable.');
+      return;
+    }
+    
+    if (!networkManager) {
+      networkManager = new NetworkManager(scene, character);
+      
+      // Use the username from URL params or generate a random one
+      const playerName = getUsername() || `Player-${Math.floor(Math.random() * 10000)}`;
+      
+      await networkManager.initialize(playerName, 'character-1');
+      
+      console.log('Multiplayer initialized!');
+      
+      // The server now supports projectiles, so no warning needed
+    }
+  } catch (error) {
+    console.error('Failed to initialize multiplayer:', error);
+  }
 }
 
+// Load the world after all registries are initialized
+async function initializeWorld() {
+    try {
+        // Load all objects from the world
+        await worldManager.loadObjects();
+        collidableObjects = worldManager.getCollidableObjects();
+        // Update character's collidable objects reference
+        character.collidableObjects = collidableObjects;
+        // Update FoodProjectile's static collidable objects
+        FoodProjectile.updateCollidableObjects(collidableObjects);
+        // Initialize spawners after objects are loaded
+        await worldManager.initializeSpawners(character);
+        
+        console.log('World loaded successfully');
+        
+        // Initialize multiplayer only if enabled
+        if (ENABLE_MULTIPLAYER) {
+            console.log('Initializing multiplayer...');
+            try {
+                await initializeMultiplayer(character);
+            } catch (error) {
+                console.error('Failed to initialize multiplayer:', error);
+                console.warn('Continuing in single-player mode due to multiplayer error');
+            }
+        } else {
+            console.log('Multiplayer disabled - skipping initialization');
+        }
+        
+        // Start animation loop after world and multiplayer are initialized
+        animationFrameId = requestAnimationFrame(animate);
+    } catch (error) {
+        console.error("Error initializing world:", error);
+        // Show error to user
+        const errorOverlay = document.createElement('div');
+        errorOverlay.style.position = 'fixed';
+        errorOverlay.style.top = '10px';
+        errorOverlay.style.left = '10px';
+        errorOverlay.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
+        errorOverlay.style.color = 'white';
+        errorOverlay.style.padding = '10px';
+        errorOverlay.style.zIndex = '10000';
+        errorOverlay.textContent = 'Error loading world: ' + error.message + '. Please refresh.';
+        document.body.appendChild(errorOverlay);
+    }
+}
+
+// Animation loop with better error handling
+function animate() {
+    try {
+        if (!documentHidden) {
+            animationFrameId = requestAnimationFrame(animate);
+        } else {
+            animationFrameId = null;
+            return; // Don't continue rendering when hidden
+        }
+
+        // Calculate delta time for smooth animation
+        const currentTime = performance.now();
+        const deltaTime = Math.min(0.1, (currentTime - (lastFrameTime || currentTime)) / 1000);
+        lastFrameTime = currentTime;
+
+        if (worldEditor.isDebugMode) {
+            // Editor view - hide character view
+            characterViewContainer.style.display = 'none';
+            worldEditor.update();
+        } else {
+            // Character view - show character view
+            characterViewContainer.style.display = 'block';
+            character.update(deltaTime);
+            
+            // Update network
+            if (networkManager && networkManager.isConnected) {
+                networkManager.update(deltaTime);
+            }
+        }
+
+        // Get all networked players and add them as collidable objects for projectiles
+        if (networkManager && networkManager.isConnected && networkManager.playerManager) {
+            const playerCollidables = [];
+            
+            // Process each networked player
+            networkManager.playerManager.players.forEach(player => {
+                if (player.model && player.boxMesh) {
+                    // Create a THREE.Box3 from the player's bounding box for quick collision tests
+                    const box = new THREE.Box3().setFromObject(player.boxMesh);
+                    
+                    // Get all meshes from the player model for precise collision
+                    const meshes = [];
+                    player.model.traverse(child => {
+                        if (child.isMesh) {
+                            meshes.push(child);
+                        }
+                    });
+                    
+                    // Only add as collidable if we have meshes
+                    if (meshes.length > 0) {
+                        playerCollidables.push({ 
+                            box, 
+                            meshes,
+                            type: 'player',
+                            player // Reference to the player for potential hit handling
+                        });
+                    }
+                }
+            });
+            
+            // Add the local character to the collidable list
+            if (character && character.boxMesh) {
+                const characterCollisionBox = character.getCollisionBox();
+                // Don't add local character if we're viewing through editor
+                if (!worldEditor.isDebugMode) {
+                    playerCollidables.push(characterCollisionBox);
+                }
+            }
+            
+            // Combine world collidable objects with player collidables
+            const allCollidables = [...collidableObjects, ...playerCollidables];
+            
+            // Update the FoodProjectile collidable objects
+            FoodProjectile.updateCollidableObjects(allCollidables);
+        }
+
+        // Update all projectiles
+        FoodProjectile.updateAll();
+        
+        // Update all hit marker effects
+        HitMarker.update();
+
+        // Update world (including spawners and check for item collection)
+        worldManager.update(character, camera);
+
+        // Render with post-processing effects
+        postProcessing.render();
+    } catch (error) {
+        console.error('Error in animation loop:', error);
+        cancelAnimationFrame(animationFrameId);
+        
+        // Show error to user
+        const errorOverlay = document.createElement('div');
+        errorOverlay.style.position = 'fixed';
+        errorOverlay.style.top = '10px';
+        errorOverlay.style.left = '10px';
+        errorOverlay.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
+        errorOverlay.style.color = 'white';
+        errorOverlay.style.padding = '10px';
+        errorOverlay.style.zIndex = '10000';
+        errorOverlay.textContent = 'Error in game loop: ' + error.message + '. Please refresh.';
+        document.body.appendChild(errorOverlay);
+    }
+}
+
+// Start initialization
 initializeWorld().catch(error => {
-    console.error("Error initializing world:", error);
+    console.error("Error in initializeWorld:", error);
+});
+
+// Add cleanup on window unload
+window.addEventListener('beforeunload', () => {
+    if (networkManager) {
+        networkManager.dispose();
+    }
 });
 
 // Handle window resize
@@ -160,30 +388,4 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     postProcessing.resize(window.innerWidth, window.innerHeight);
-});
-
-// Animation loop
-function animate() {
-    requestAnimationFrame(animate);
-
-    if (worldEditor.isDebugMode) {
-        // Editor view - hide character view
-        characterViewContainer.style.display = 'none';
-        worldEditor.update();
-    } else {
-        // Character view - show character view
-        characterViewContainer.style.display = 'block';
-        character.update();
-    }
-
-    // Update all projectiles
-    FoodProjectile.updateAll();
-
-    // Update world (including spawners and check for item collection)
-    worldManager.update(character, camera);
-
-    // Render with post-processing effects
-    postProcessing.render();
-}
-
-animate(); 
+}); 
