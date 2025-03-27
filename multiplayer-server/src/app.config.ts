@@ -22,14 +22,13 @@ export default config({
         /**
          * Configure CORS
          */
-        app.use(cors());
+        app.use(cors({
+            origin: ['http://localhost:8080', 'https://food-vibers.onrender.com', 'https://play.foodvibers.com', 'https://foodvibers.netlify.app'],
+            methods: ['GET', 'POST', 'OPTIONS'],
+            credentials: true,
+            optionsSuccessStatus: 204
+        }));
 
-        // {
-        //     origin: ['http://localhost:8080', 'https://food-vibers.onrender.com', 'play.foodvibers.com', 'foodvibers.netlify.app'],
-        //     methods: ['GET', 'POST', 'OPTIONS'],
-        //     credentials: true,
-        //     optionsSuccessStatus: 204
-        // }
         /**
          * Bind your custom express routes here:
          * Read more: https://expressjs.com/en/starter/basic-routing.html
