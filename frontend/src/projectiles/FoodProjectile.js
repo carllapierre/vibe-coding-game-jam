@@ -291,17 +291,18 @@ export class FoodProjectile {
             document.body.appendChild(container);
         }
         
+        const words = ['Hit!', 'Oooof!', 'Vibes', 'Gotcha', 'Vibin!']
         // Create text-based hitmarker
         const hitmarker = document.createElement('div');
         hitmarker.className = 'hitmarker';
         hitmarker.style.position = 'absolute';
-        hitmarker.style.color = '#ff3333';
+        hitmarker.style.color = '#ffa500'; //pastel orange;
         hitmarker.style.fontFamily = 'Arial, sans-serif';
         hitmarker.style.fontSize = '16px';
         hitmarker.style.fontWeight = 'bold';
-        hitmarker.style.textShadow = '0 0 3px rgba(0, 0, 0, 0.7)';
+        hitmarker.style.textShadow = '0 0 3px rgba(0, 0, 0, 1)';
         hitmarker.style.userSelect = 'none';
-        hitmarker.textContent = 'HIT!';
+        hitmarker.textContent = words[Math.floor(Math.random() * words.length)];
         
         // Position in random location near center
         // Get viewport dimensions
@@ -365,17 +366,17 @@ export class FoodProjectile {
                 const secondHit = document.createElement('div');
                 secondHit.className = 'hitmarker';
                 secondHit.style.position = 'absolute';
-                secondHit.style.color = '#ff5555'; // Slightly lighter red
+                secondHit.style.color = '#ffa500'; 
                 secondHit.style.fontFamily = 'Arial, sans-serif';
-                secondHit.style.fontSize = '16px';
+                secondHit.style.fontSize = '20px';
                 secondHit.style.fontWeight = 'bold';
-                secondHit.style.textShadow = '0 0 3px rgba(0, 0, 0, 0.7)';
+                secondHit.style.textShadow = '0 0 3px rgba(0, 0, 0, 1)';
                 secondHit.style.userSelect = 'none';
                 secondHit.textContent = words[Math.floor(Math.random() * words.length)];
                 
                 // Different random position
-                const offset2X = (Math.random() - 0.5) * 120; // Wider spread
-                const offset2Y = (Math.random() - 0.5) * 120;
+                const offset2X = (Math.random() - 0.5) * 150; // Wider spread
+                const offset2Y = (Math.random() - 0.5) * 150;
                 
                 secondHit.style.left = `${centerX + offset2X}px`;
                 secondHit.style.top = `${centerY + offset2Y}px`;
@@ -387,11 +388,11 @@ export class FoodProjectile {
                 // Animate with different timing
                 const randomRotation2 = (Math.random() - 0.8) * 15; // More rotation
                 
-                secondHit.style.transition = 'all 0.2s ease-out';
+                secondHit.style.transition = 'all 0.4s ease-out';
                 secondHit.style.transform = `translate(-50%, -50%) scale(1.3) rotate(${randomRotation2}deg)`;
                 
                 setTimeout(() => {
-                    secondHit.style.transition = 'all 0.4s ease-in';
+                    secondHit.style.transition = 'all 0.6s ease-in';
                     secondHit.style.opacity = '0';
                     secondHit.style.transform = `translate(-50%, -50%) scale(0.9) rotate(${randomRotation2}deg)`;
                     
