@@ -256,11 +256,6 @@ export class Character {
                 this.inventory.selectSlot(num - 1);
             }
         }
-        
-        // Test health reduction when Enter is pressed
-        if (event.key === 'Enter') {
-            this.healthManager.removeHealth(50);
-        }
     }
 
     handleKeyUp(event) {
