@@ -3,7 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ObjectRegistry } from '../../registries/ObjectRegistry.js';
 import { PortalRegistry } from '../../registries/PortalRegistry.js';
+import { PosterRegistry } from '../../registries/PosterRegistry.js';
 import { PortalObject } from '../../portals/PortalObject.js';
+import { PosterObject } from '../../posters/PosterObject.js';
 import worldManagerService from '../../services/WorldManagerService.js';
 import { ChangeManager } from './ChangeManager.js';
 import { TransformManager } from './TransformManager.js';
@@ -189,6 +191,7 @@ export class EditorCore {
             this.placeObjectInWorld.bind(this), 
             this.placeSpawnerInWorld.bind(this),
             this.placePortalInWorld.bind(this),
+            this.placePosterInWorld.bind(this),
             this.camera,
             this.saveFeedback
         );
@@ -610,6 +613,52 @@ export class EditorCore {
     }
     
     /**
+     * Place a poster in the world
+     * @param {string} posterId - Poster ID from registry
+     * @param {THREE.Vector3} position - Position to place the poster
+     */
+    placePosterInWorld(posterId, position) {
+        try {
+            console.log(`Placing poster ${posterId} at position:`, position);
+            
+            // Generate a unique instance index - use current timestamp
+            const instanceIndex = Date.now();
+            
+            // Create poster object with explicit instance index
+            const poster = new PosterObject(posterId, position, instanceIndex);
+            console.log(`Created poster object with instanceIndex ${instanceIndex}:`, poster);
+            
+            // Add to scene
+            this.scene.add(poster);
+            
+            // Select with transform controls
+            this.transformManager.transformControls.attach(poster);
+            
+            // Record creation change
+            this.changeManager.recordChange(poster);
+            
+            // Show feedback
+            showFeedback(
+                this.saveFeedback,
+                `Added ${posterId} poster - Press K to save`,
+                'rgba(0, 255, 0, 0.7)'
+            );
+            
+            // Return the created poster
+            return poster;
+        } catch (error) {
+            console.error('Error placing poster:', error);
+            
+            showFeedback(
+                this.saveFeedback,
+                `Error: ${error.message}`,
+                'rgba(255, 0, 0, 0.7)'
+            );
+            return null;
+        }
+    }
+    
+    /**
      * Save all changes to the world
      */
     async saveAllChanges() {
@@ -642,6 +691,14 @@ export class EditorCore {
                     promises.push(this.worldManager.savePortals());
                 } else {
                     console.warn("savePortals method not found on worldManager");
+                }
+                
+                // Save posters
+                if (this.worldManager.savePosters) {
+                    console.log("Adding savePosters to save queue");
+                    promises.push(this.worldManager.savePosters());
+                } else {
+                    console.warn("savePosters method not found on worldManager");
                 }
                 
                 // Wait for all saves to complete
@@ -978,78 +1035,204 @@ export class EditorCore {
             }
         };
         
+        // Add posters from world data
+        const addPosters = async () => {
+            try {
+                console.log("Starting to load posters from world data...");
+                const worldData = await worldManagerService.getWorldData();
+                
+                console.log("World data keys:", Object.keys(worldData));
+                
+                if (!worldData) {
+                    console.warn("No world data found for loading posters");
+                    return;
+                }
+                
+                if (!worldData.posters) {
+                    console.log("No posters array in world data");
+                    return;
+                }
+                
+                if (!Array.isArray(worldData.posters)) {
+                    console.warn("Posters property exists but is not an array:", worldData.posters);
+                    return;
+                }
+                
+                if (worldData.posters.length === 0) {
+                    console.log("Posters array is empty - no posters to load");
+                    return;
+                }
+                
+                console.log(`Found ${worldData.posters.length} posters in world data:`, worldData.posters);
+                
+                // First, remove any existing posters from the scene to prevent duplicates
+                const existingPosters = [];
+                this.scene.traverse(obj => {
+                    if (obj.userData && obj.userData.type === 'poster') {
+                        existingPosters.push(obj);
+                    }
+                });
+                
+                if (existingPosters.length > 0) {
+                    console.log(`Removing ${existingPosters.length} existing posters before loading`);
+                    existingPosters.forEach(poster => {
+                        // Dispose resources if possible
+                        if (typeof poster.dispose === 'function') {
+                            poster.dispose();
+                        }
+                        this.scene.remove(poster);
+                    });
+                }
+                
+                // Add each poster to the scene
+                worldData.posters.forEach((posterData, index) => {
+                    try {
+                        console.log(`Loading poster ${index + 1}/${worldData.posters.length}: ${posterData.id}`);
+                        
+                        // Skip posters with invalid data
+                        if (!posterData.id || !posterData.position) {
+                            console.warn(`Poster ${index} has invalid data:`, posterData);
+                            return;
+                        }
+                        
+                        // Create the poster
+                        const poster = new PosterObject(posterData.id, new THREE.Vector3(
+                            posterData.position.x,
+                            posterData.position.y,
+                            posterData.position.z
+                        ));
+                        
+                        // Make sure the poster has the correct instanceIndex from the saved data
+                        if (posterData.instanceIndex) {
+                            poster.userData.instanceIndex = posterData.instanceIndex;
+                        }
+                        
+                        // Set rotation
+                        if (posterData.rotation) {
+                            poster.rotation.set(
+                                posterData.rotation.x,
+                                posterData.rotation.y,
+                                posterData.rotation.z
+                            );
+                        }
+                        
+                        // Set scale
+                        if (posterData.scale) {
+                            poster.scale.set(
+                                posterData.scale.x,
+                                posterData.scale.y,
+                                posterData.scale.z
+                            );
+                        }
+                        
+                        // Update label if custom label exists
+                        if (posterData.label) {
+                            poster.updateLabel(posterData.label);
+                        }
+                        
+                        // Add to scene
+                        this.scene.add(poster);
+                        
+                        console.log(`Added poster ${posterData.id} to scene`);
+                        
+                    } catch (error) {
+                        console.error(`Error loading poster ${posterData.id}:`, error);
+                    }
+                });
+                
+                console.log(`Successfully loaded ${worldData.posters.length} posters from world data`);
+                
+            } catch (error) {
+                console.error('Error loading posters:', error);
+            }
+        };
+        
         // Add method to save portals
         this.worldManager.savePortals = async () => {
             try {
                 console.log("Starting savePortals process...");
                 
+                // ... existing portal saving code ...
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving portals:', error);
+                return false;
+            }
+        };
+        
+        // Add method to save posters
+        this.worldManager.savePosters = async () => {
+            try {
+                console.log("Starting savePosters process...");
+                
                 // Get current world data
                 const worldData = await worldManagerService.getWorldData();
                 console.log("Current world data structure:", Object.keys(worldData));
                 
-                // Ensure the portals array exists
-                if (!worldData.portals) {
-                    console.log("Creating portals array in world data");
-                    worldData.portals = [];
+                // Ensure the posters array exists
+                if (!worldData.posters) {
+                    console.log("Creating posters array in world data");
+                    worldData.posters = [];
                 }
                 
-                // Find all portals in the scene
-                const portalObjects = [];
+                // Find all posters in the scene
+                const posterObjects = [];
                 this.scene.traverse(object => {
-                    if (object.userData && object.userData.type === 'portal') {
-                        console.log(`Found portal in scene: ${object.userData.id} with instance ${object.userData.instanceIndex}`);
-                        portalObjects.push(object);
+                    if (object.userData && object.userData.type === 'poster') {
+                        console.log(`Found poster in scene: ${object.userData.id} with instance ${object.userData.instanceIndex}`);
+                        posterObjects.push(object);
                     }
                 });
                 
-                console.log(`Found ${portalObjects.length} portals in the scene`);
+                console.log(`Found ${posterObjects.length} posters in the scene`);
                 
-                // Reset portals array
-                worldData.portals = [];
+                // Reset posters array
+                worldData.posters = [];
                 
-                // Add each portal to world data
-                portalObjects.forEach(portal => {
-                    const portalData = {
-                        id: portal.userData.id,
-                        instanceIndex: portal.userData.instanceIndex,
+                // Add each poster to world data
+                posterObjects.forEach(poster => {
+                    const posterData = {
+                        id: poster.userData.id,
+                        instanceIndex: poster.userData.instanceIndex,
                         position: {
-                            x: portal.position.x,
-                            y: portal.position.y,
-                            z: portal.position.z
+                            x: poster.position.x,
+                            y: poster.position.y,
+                            z: poster.position.z
                         },
                         rotation: {
-                            x: portal.rotation.x,
-                            y: portal.rotation.y,
-                            z: portal.rotation.z
+                            x: poster.rotation.x,
+                            y: poster.rotation.y,
+                            z: poster.rotation.z
                         },
                         scale: {
-                            x: portal.scale.x,
-                            y: portal.scale.y,
-                            z: portal.scale.z
+                            x: poster.scale.x,
+                            y: poster.scale.y,
+                            z: poster.scale.z
                         },
-                        label: portal.label ? portal.label.text : null
+                        label: poster.label ? poster.label.userData.text : null
                     };
                     
-                    console.log(`Adding portal to world data:`, portalData);
-                    worldData.portals.push(portalData);
+                    console.log(`Adding poster to world data:`, posterData);
+                    worldData.posters.push(posterData);
                 });
                 
-                console.log(`Prepared ${worldData.portals.length} portals for saving`);
+                console.log(`Prepared ${worldData.posters.length} posters for saving`);
                 
                 // Log the structure of the world data before saving
                 console.log("World data structure before saving:", {
-                    hasPortals: !!worldData.portals,
-                    portalCount: worldData.portals ? worldData.portals.length : 0,
+                    hasPosters: !!worldData.posters,
+                    posterCount: worldData.posters ? worldData.posters.length : 0,
                     topLevelKeys: Object.keys(worldData)
                 });
                 
                 // Save world data
                 const saveResult = await worldManagerService.saveWorldData(worldData);
-                console.log(`Saved ${worldData.portals.length} portals to world data, result:`, saveResult);
+                console.log(`Saved ${worldData.posters.length} posters to world data, result:`, saveResult);
                 
                 return true;
             } catch (error) {
-                console.error('Error saving portals:', error);
+                console.error('Error saving posters:', error);
                 return false;
             }
         };
@@ -1064,17 +1247,20 @@ export class EditorCore {
             });
         };
         
-        // Add portals to initial load chain
+        // Add portals and posters to initial load chain
         if (!this.worldManager.initPromises) {
             this.worldManager.initPromises = [];
         }
-        this.worldManager.initPromises.push(addPortals());
         
-        // Add portals to save chain
+        this.worldManager.initPromises.push(addPortals());
+        this.worldManager.initPromises.push(addPosters());
+        
+        // Add portals and posters to save chain
         if (!this.worldManager.saveTypes) {
             this.worldManager.saveTypes = [];
         }
         this.worldManager.saveTypes.push('portals');
+        this.worldManager.saveTypes.push('posters');
     }
     
     /**

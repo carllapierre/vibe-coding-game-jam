@@ -27,6 +27,10 @@ export class WorldManager {
         this.cullingDistance = 100; // Maximum distance for objects to be visible
         this.visibilityUpdateFrequency = 5; // Update visibility every N frames
         this.frameCount = 0;
+        
+        // Initialize arrays for promises and save types
+        this.initPromises = [];
+        this.saveTypes = [];
     }
 
     get scaleFactor() {
@@ -37,6 +41,12 @@ export class WorldManager {
         try {
             const worldData = await worldManagerService.getWorldData();
             this.worldData = worldData;
+            
+            // Execute all initialization promises if they exist
+            if (this.initPromises && this.initPromises.length > 0) {
+                await Promise.all(this.initPromises);
+                console.log("Executed all initialization promises");
+            }
             
             return worldData;
         } catch (error) {
@@ -493,5 +503,81 @@ export class WorldManager {
                 console.error(`Error creating spawner at index ${index}:`, error);
             }
         });
+    }
+
+    async loadPosters() {
+        if (!this.worldData) {
+            await this.loadWorld();
+        }
+
+        // Skip if there's no posters array in the world data
+        if (!this.worldData.posters || !Array.isArray(this.worldData.posters) || this.worldData.posters.length === 0) {
+            console.log("No posters found in world data");
+            return [];
+        }
+
+        console.log(`Loading ${this.worldData.posters.length} posters from world data`);
+        
+        const loadedPosters = [];
+        
+        // Import needed classes
+        const { PosterObject } = await import('../posters/PosterObject.js');
+        
+        // Process each poster from world data
+        this.worldData.posters.forEach((posterData) => {
+            try {
+                // Skip posters with invalid data
+                if (!posterData.id || !posterData.position) {
+                    console.warn(`Poster has invalid data:`, posterData);
+                    return;
+                }
+                
+                // Create position vector
+                const position = new THREE.Vector3(
+                    posterData.position.x,
+                    posterData.position.y,
+                    posterData.position.z
+                );
+                
+                // Create poster object
+                const poster = new PosterObject(posterData.id, position, posterData.instanceIndex);
+                
+                // Set rotation if available
+                if (posterData.rotation) {
+                    poster.rotation.set(
+                        posterData.rotation.x,
+                        posterData.rotation.y,
+                        posterData.rotation.z
+                    );
+                }
+                
+                // Set scale if available
+                if (posterData.scale) {
+                    poster.scale.set(
+                        posterData.scale.x,
+                        posterData.scale.y,
+                        posterData.scale.z
+                    );
+                }
+                
+                // Update label if specified
+                if (posterData.label) {
+                    poster.updateLabel(posterData.label);
+                }
+                
+                // Add to scene
+                this.scene.add(poster);
+                
+                // Store in loaded posters array
+                loadedPosters.push(poster);
+                
+                console.log(`Added poster ${posterData.id} to scene`);
+            } catch (error) {
+                console.error(`Error loading poster ${posterData.id}:`, error);
+            }
+        });
+        
+        console.log(`Successfully loaded ${loadedPosters.length} posters`);
+        return loadedPosters;
     }
 }

@@ -73,7 +73,23 @@ export class ObjectRegistry extends Registry {
         { id: 'kitchen-coffee-machine', model: 'kitchenCoffeeMachine.glb', scale: 1.0, pathOverride: 'furniture/' },
         { id: 'kitchen-cabinet', model: 'kitchenCabinet.glb', scale: 1.0, pathOverride: 'furniture/' },
         { id: 'kitchen-blender', model: 'kitchenBlender.glb', scale: 1.0, pathOverride: 'furniture/' },
-        { id: 'kitchen-bar', model: 'kitchenBar.glb', scale: 1.0, pathOverride: 'furniture/' }
+        { id: 'kitchen-bar', model: 'kitchenBar.glb', scale: 1.0, pathOverride: 'furniture/' },
+        
+        // Games
+        { id: 'vending-machine', model: 'vending-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'ticket-machine', model: 'ticket-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'prizes', model: 'prizes.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'prize-wheel', model: 'prize-wheel.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'pinball', model: 'pinball.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'gambling-machine', model: 'gambling-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'dance-machine', model: 'dance-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'claw-machine', model: 'claw-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'character-gamer', model: 'character-gamer.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'character-employee', model: 'character-employee.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'cash-register', model: 'cash-register.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'basketball-game', model: 'basketball-game.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'arcade-machine', model: 'arcade-machine.glb', scale: 1.0, pathOverride: 'games/' },
+        { id: 'air-hockey', model: 'air-hockey.glb', scale: 1.0, pathOverride: 'games/' }
         
     ];
 

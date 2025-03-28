@@ -71,6 +71,44 @@ const ENABLE_MULTIPLAYER = true; // Set to true only when testing multiplayer sp
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+// Add skybox to the scene
+function createSkybox() {
+    // Try loading texture-based skybox
+    try {
+        const loader = new THREE.CubeTextureLoader();
+        loader.setPath(assetPath('skybox/'));
+        
+        const skyboxTexture = loader.load([
+            'right.jpg', 'left.jpg',
+            'top.jpg', 'bottom.jpg',
+            'front.jpg', 'back.jpg'
+        ],
+        // Success callback
+        () => {
+            console.log('Skybox textures loaded successfully');
+        },
+        // Progress callback
+        undefined,
+        // Error callback - fallback to color skybox
+        (err) => {
+            console.warn('Failed to load skybox textures, using color skybox instead:', err);
+            createColorSkybox();
+        });
+        
+        scene.background = skyboxTexture;
+    } catch (error) {
+        console.warn('Error creating texture skybox, falling back to color skybox:', error);
+        createColorSkybox();
+    }
+}
+
+// Create a simple color gradient skybox as fallback
+function createColorSkybox() {
+    // Set a nice sky blue color as background
+    scene.background = new THREE.Color(0xe3b152);
+    console.log('Color skybox created');
+}
+
 // Make camera globally accessible for hit markers
 window.camera = camera;
 
@@ -116,7 +154,7 @@ document.addEventListener('visibilitychange', function() {
 const postProcessing = new PostProcessingComposer(renderer, scene, camera, {
     brightness: 4.5,  // Increase brightness (1.0 is normal)
     saturation: 1.1,  // Keep the default saturation
-    bloomStrength: 0.4,
+    bloomStrength: 0.35,
     bloomRadius: 0.4,
     bloomThreshold: 0.2
 });
@@ -257,6 +295,9 @@ async function initializeMultiplayer(character) {
 // Load the world after all registries are initialized
 async function initializeWorld() {
     try {
+        // Create skybox
+        createSkybox();
+        
         // Load all objects from the world
         await worldManager.loadObjects();
         collidableObjects = worldManager.getCollidableObjects();
@@ -266,6 +307,8 @@ async function initializeWorld() {
         FoodProjectile.updateCollidableObjects(collidableObjects);
         // Initialize spawners after objects are loaded
         await worldManager.initializeSpawners(character);
+        // Load posters
+        await worldManager.loadPosters();
         
         console.log('World loaded successfully');
         

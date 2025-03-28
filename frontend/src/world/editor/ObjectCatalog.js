@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ObjectRegistry } from '../../registries/ObjectRegistry.js';
 import { SpawnerRegistry } from '../../registries/SpawnerRegistry.js';
 import { PortalRegistry } from '../../registries/PortalRegistry.js';
+import { PosterRegistry } from '../../registries/PosterRegistry.js';
 import { getPositionInFrontOfCamera } from '../../utils/SceneUtils.js';
 import { showFeedback } from '../../utils/UIUtils.js';
 import sharedRenderer from '../../utils/SharedRenderer.js';
@@ -15,13 +16,15 @@ export class ObjectCatalog {
      * @param {Function} placeObjectCallback - Callback to place objects in the world
      * @param {Function} placeSpawnerCallback - Callback to place spawners in the world
      * @param {Function} placePortalCallback - Callback to place portals in the world
+     * @param {Function} placePosterCallback - Callback to place posters in the world
      * @param {THREE.Camera} camera - Three.js camera for placing objects
      * @param {HTMLElement} feedbackElement - Element for feedback messages
      */
-    constructor(placeObjectCallback, placeSpawnerCallback, placePortalCallback, camera, feedbackElement) {
+    constructor(placeObjectCallback, placeSpawnerCallback, placePortalCallback, placePosterCallback, camera, feedbackElement) {
         this.placeObjectCallback = placeObjectCallback;
         this.placeSpawnerCallback = placeSpawnerCallback;
         this.placePortalCallback = placePortalCallback;
+        this.placePosterCallback = placePosterCallback;
         this.camera = camera;
         this.feedbackElement = feedbackElement;
         
@@ -189,6 +192,23 @@ export class ObjectCatalog {
         // Add each portal from the registry
         PortalRegistry.items.forEach(item => {
             this.createPortalItem(item);
+        });
+        
+        // Add section title for posters
+        const postersTitle = document.createElement('div');
+        postersTitle.style.cssText = `
+            font-size: 14px;
+            font-weight: bold;
+            padding: 5px;
+            margin: 15px 0 5px 0;
+            border-bottom: 1px solid #555;
+        `;
+        postersTitle.textContent = 'Posters';
+        this.itemsContainer.appendChild(postersTitle);
+        
+        // Add each poster from the registry
+        PosterRegistry.items.forEach(item => {
+            this.createPosterItem(item);
         });
         
         // Add section title for spawners
@@ -412,6 +432,118 @@ export class ObjectCatalog {
         // Add click event for portal placement
         itemElement.addEventListener('click', () => {
             this.placePortal(item.id);
+        });
+        
+        // Hover effect
+        itemElement.addEventListener('mouseenter', () => {
+            itemElement.style.background = 'rgba(80, 80, 80, 0.8)';
+        });
+        
+        itemElement.addEventListener('mouseleave', () => {
+            itemElement.style.background = 'rgba(60, 60, 60, 0.8)';
+        });
+        
+        this.itemsContainer.appendChild(itemElement);
+    }
+    
+    /**
+     * Create an item element for a poster
+     * @param {Object} item - Poster data from registry
+     */
+    createPosterItem(item) {
+        const itemElement = document.createElement('div');
+        itemElement.classList.add('catalog-item');
+        itemElement.dataset.id = item.id;
+        itemElement.dataset.type = 'poster';
+        itemElement.style.cssText = `
+            background: rgba(60, 60, 60, 0.8);
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: background 0.2s;
+            margin-bottom: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        `;
+        
+        // Poster preview container
+        const previewContainer = document.createElement('div');
+        previewContainer.style.cssText = `
+            width: 100%;
+            height: 100px;
+            background: rgba(30, 30, 30, 0.5);
+            margin-bottom: 8px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        `;
+        
+        // Create a simple preview for the poster
+        const posterPreview = document.createElement('div');
+        posterPreview.style.cssText = `
+            width: 60px;
+            height: 80px;
+            background: #${item.frameColor ? item.frameColor.toString(16).padStart(6, '0') : '8B4513'};
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        // Poster icon
+        const posterIcon = document.createElement('div');
+        posterIcon.style.cssText = `
+            color: #ffffff;
+            font-size: 32px;
+            text-align: center;
+        `;
+        posterIcon.textContent = '🖼️';
+        
+        posterPreview.appendChild(posterIcon);
+        previewContainer.appendChild(posterPreview);
+        
+        // Item name
+        const nameElement = document.createElement('div');
+        nameElement.textContent = item.id
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+        nameElement.style.cssText = `
+            font-size: 12px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        `;
+        
+        // Item description
+        const descElement = document.createElement('div');
+        descElement.textContent = item.description || 'Poster';
+        descElement.style.cssText = `
+            font-size: 10px;
+            color: #aaa;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            margin-top: 2px;
+        `;
+        
+        itemElement.appendChild(previewContainer);
+        itemElement.appendChild(nameElement);
+        itemElement.appendChild(descElement);
+        
+        // Add click event for poster placement
+        itemElement.addEventListener('click', () => {
+            this.placePoster(item.id);
         });
         
         // Hover effect
@@ -651,6 +783,35 @@ export class ObjectCatalog {
             );
         } catch (error) {
             console.error(`Error placing portal ${portalId}:`, error);
+            
+            showFeedback(
+                this.feedbackElement,
+                `Error: ${error.message}`,
+                'rgba(255, 0, 0, 0.7)'
+            );
+        }
+    }
+    
+    /**
+     * Place a poster in the world
+     * @param {string} posterId - ID of the poster to place
+     */
+    placePoster(posterId) {
+        try {
+            // Get position in front of camera
+            const position = getPositionInFrontOfCamera(this.camera);
+            
+            // Call the callback with the poster ID and position
+            this.placePosterCallback(posterId, position);
+            
+            // Show feedback
+            showFeedback(
+                this.feedbackElement,
+                `Placed ${posterId} poster`,
+                'rgba(0, 255, 0, 0.7)'
+            );
+        } catch (error) {
+            console.error(`Error placing poster ${posterId}:`, error);
             
             showFeedback(
                 this.feedbackElement,

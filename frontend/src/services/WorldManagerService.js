@@ -18,7 +18,8 @@ class WorldManagerService {
             },
             objects: [],
             spawners: [],
-            portals: []
+            portals: [],
+            posters: []
         };
         
         // Keep track of loaded spawners
@@ -51,7 +52,8 @@ class WorldManagerService {
                 settings: data.settings || this.defaultWorldData.settings,
                 objects: data.objects || [],
                 spawners: data.spawners || [],
-                portals: data.portals || []
+                portals: data.portals || [],
+                posters: data.posters || []
             }));
 
             return worldDataCopy;
@@ -69,7 +71,8 @@ class WorldManagerService {
                 settings: worldData.settings || this.defaultWorldData.settings,
                 objects: worldData.objects || [],
                 spawners: worldData.spawners || [],
-                portals: worldData.portals || []
+                portals: worldData.portals || [],
+                posters: worldData.posters || []
             }));
             // Convert to a string once to avoid JSON.stringify being called multiple times
             const jsonData = JSON.stringify(dataToSave, null, 4);
