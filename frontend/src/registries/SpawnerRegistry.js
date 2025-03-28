@@ -12,6 +12,7 @@ export class SpawnerRegistry extends Registry {
         { id: 'just-coffee', cooldown: 10000, items: ['cup-coffee'] },
         { id: 'non-edibles-1', cooldown: 3000, items: ['pizza-box', 'plate-deep', 'utensil-fork', 'utensil-spoon', 'utensil-knife'] },
         { id: 'rare-1', cooldown: 5000, items: ['cake'] },
+        { id: 'arcade', cooldown: 3000, items: ['pizza', 'ice-cream', 'sundae', 'popsicle', 'donut-sprinkles' ] },
     ];
 
 }

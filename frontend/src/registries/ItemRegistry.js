@@ -26,6 +26,8 @@ export class ItemRegistry extends Registry {
         { id: 'pie', model: 'pie.glb', scale: 0.6 },
         { id: 'mincemeat-pie', model: 'mincemeat-pie.glb', scale: 0.6 },
         { id: 'waffle', model: 'waffle.glb', scale: 0.6 },
+        { id: 'donut', model: 'donut.glb', scale: 0.6 },
+        { id: 'donut-sprinkles', model: 'donut-sprinkles.glb', scale: 1.5},
 
         // Fruits and Vegetables
         { id: 'tomato', model: 'tomato.glb', scale: 0.5 },
@@ -66,12 +68,12 @@ export class ItemRegistry extends Registry {
         { id: 'mussel-open', model: 'mussel-open.glb', scale: 0.4 },
 
         // Desserts and Sweets
-        { id: 'ice-cream', model: 'ice-cream.glb', scale: 0.5 },
+        { id: 'ice-cream', model: 'ice-cream.glb', scale: 0.9 },
         { id: 'ice-cream-scoop-mint', model: 'ice-cream-scoop-mint.glb', scale: 0.4 },
         { id: 'sundae', model: 'sundae.glb', scale: 0.5 },
         { id: 'pudding', model: 'pudding.glb', scale: 0.5 },
         { id: 'lollypop', model: 'lollypop.glb', scale: 0.5 },
-        { id: 'popsicle', model: 'popsicle.glb', scale: 0.5 },
+        { id: 'popsicle', model: 'popsicle.glb', scale: 1 },
         { id: 'popsicle-chocolate', model: 'popsicle-chocolate.glb', scale: 0.5 },
         { id: 'whipped-cream', model: 'whipped-cream.glb', scale: 0.5 },
         { id: 'honey', model: 'honey.glb', scale: 0.5 },
