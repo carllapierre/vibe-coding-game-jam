@@ -8,6 +8,7 @@ export class AudioRegistry extends Registry {
         { id: 'song-1', name: 'Song 1', model: 'song-1.wav', type: 'song' },
         { id: 'song-2', name: 'Song 2', model: 'song-2.wav', type: 'song' },
         { id: 'song-3', name: 'Song 3', model: 'song-3.wav', type: 'song' },
+        { id: 'song-4', name: 'Song 4', model: 'song-4.wav', type: 'song' },
     ];
 
     static getModelPath(id) {

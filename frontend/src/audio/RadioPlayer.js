@@ -86,7 +86,7 @@ export class RadioPlayer {
         
         // Create a feedback gain for the echo
         const feedbackGain = this.#audioContext.createGain();
-        feedbackGain.gain.value = 0.02; // Echo volume (0-1)
+        feedbackGain.gain.value = 0.04; // Echo volume (0-1)
         
         // Connect nodes: gain -> output and gain -> delay -> feedback -> gain
         this.#gainNode.connect(this.#audioContext.destination);
