@@ -18,12 +18,47 @@ import { initWebGLTracker, logWebGLInfo, getActiveContextCount } from './utils/W
 import sharedRenderer from './utils/SharedRenderer.js';
 import { initializeFromUrlParams, getUsername } from './utils/urlParams.js';
 import { HitMarker } from './projectiles/HitMarker.js';
+import { AudioManager } from './audio/AudioManager.js';
+import { RadioPlayer } from './audio/RadioPlayer.js';
 
 // Initialize WebGL tracking
 initWebGLTracker();
 
 // Initialize URL parameters to get username
 initializeFromUrlParams();
+
+// Add keyboard listener for music controls
+document.addEventListener('keydown', (event) => {
+    // Toggle music mute with 'M' key
+    if (event.key.toLowerCase() === 'm') {
+        const newMutedState = !RadioPlayer.isMuted();
+        RadioPlayer.setMuted(newMutedState);
+        
+        // Show visual feedback when muting/unmuting
+        const muteStatus = document.createElement('div');
+        muteStatus.textContent = `Music ${newMutedState ? 'Muted' : 'Unmuted'}`;
+        muteStatus.style.position = 'fixed';
+        muteStatus.style.top = '50%';
+        muteStatus.style.left = '50%';
+        muteStatus.style.transform = 'translate(-50%, -50%)';
+        muteStatus.style.background = 'rgba(0, 0, 0, 0.7)';
+        muteStatus.style.color = 'white';
+        muteStatus.style.padding = '15px 20px';
+        muteStatus.style.borderRadius = '8px';
+        muteStatus.style.fontFamily = 'system-ui, sans-serif';
+        muteStatus.style.fontSize = '18px';
+        muteStatus.style.zIndex = '10001';
+        
+        document.body.appendChild(muteStatus);
+        
+        // Remove the status message after a short delay
+        setTimeout(() => {
+            document.body.removeChild(muteStatus);
+        }, 1500);
+        
+        console.log(`Music ${newMutedState ? 'muted' : 'unmuted'}`);
+    }
+});
 
 // Add this global variable to track multiple tabs
 const MULTIPLAYER_TAB_ID = `tab_${Math.random().toString(36).substring(2, 15)}`;
@@ -233,6 +268,12 @@ async function initializeWorld() {
         await worldManager.initializeSpawners(character);
         
         console.log('World loaded successfully');
+        
+        // Initialize the radio player
+        RadioPlayer.initialize();
+        // Set initial volumes
+        RadioPlayer.setVolume(0.005); // Start at 7% volume for background music
+        AudioManager.setSfxVolume(0.07); // Start at 70% volume for sound effects
         
         // Initialize multiplayer only if enabled
         if (ENABLE_MULTIPLAYER) {
