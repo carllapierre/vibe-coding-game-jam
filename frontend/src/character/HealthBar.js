@@ -55,8 +55,8 @@ export class HealthBar {
       this.sprite = new Sprite(material);
       
       // Position below the name tag (not above)
-      this.sprite.position.set(0, 0.83, 0); // Lower Y value to position below name tag
-      this.sprite.scale.set(0.8, 0.1, 1); // Even thinner and smaller width
+      this.sprite.position.set(0, 0.8, 0); // Lower position
+      this.sprite.scale.set(0.7, 0.07, 1); // Even thinner and smaller width
       this.sprite.renderOrder = 9999; // Ensure it renders on top of everything else
       
       // Add the sprite to the model

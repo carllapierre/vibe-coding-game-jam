@@ -122,6 +122,9 @@ export class LobbyRoom extends Room<LobbyState> {
       
       console.log(`Processing hit: ${sourceId} -> ${targetId} for ${damage} damage with ${itemType}`);
       
+      // Generate a unique hit ID for tracking
+      const hitId = `hit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       // Update target player's health
       targetPlayer.health = Math.max(0, targetPlayer.health - damage);
       console.log(`${targetId}'s health reduced to ${targetPlayer.health}`);
@@ -136,14 +139,33 @@ export class LobbyRoom extends Room<LobbyState> {
         this.respawnPlayer(targetPlayer);
       }
       
-      // Broadcast damage event to all clients
+      // Broadcast damage event to ALL clients including the target and source
+      // This ensures synchronization across all clients
       this.broadcast("playerDamaged", {
+        hitId: hitId, // Add unique ID for deduplication
         targetId: targetId,
         sourceId: sourceId || client.sessionId,
         damage: damage,
         itemType: itemType,
-        remainingHealth: targetPlayer.health
+        remainingHealth: targetPlayer.health,
+        timestamp: Date.now()
       });
+      
+      // Send a direct message to the target player to ensure they get the hit
+      // This helps with reliable delivery of hit events
+      const targetClient = this.clients.find(c => c.sessionId === targetId);
+      if (targetClient) {
+        targetClient.send("playerDamaged", {
+          hitId: hitId,
+          targetId: targetId,
+          sourceId: sourceId || client.sessionId,
+          damage: damage,
+          itemType: itemType,
+          remainingHealth: targetPlayer.health,
+          timestamp: Date.now(),
+          direct: true // Flag indicating this is a direct message
+        });
+      }
     });
   }
 

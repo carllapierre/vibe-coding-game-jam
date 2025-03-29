@@ -431,11 +431,31 @@ export class NetworkManager {
    */
   onPlayerDamaged(data) {
     try {
-      const { targetId, sourceId, amount, remainingHealth, itemType } = data;
+      const { hitId, targetId, sourceId, amount, remainingHealth, itemType, timestamp, direct } = data;
+      
+      // Track received hit IDs to prevent duplicate processing
+      if (!this._processedHits) this._processedHits = new Set();
+      
+      // Skip if we've already processed this hit
+      if (hitId && this._processedHits.has(hitId)) {
+        return;
+      }
+      
+      // Mark this hit as processed
+      if (hitId) {
+        this._processedHits.add(hitId);
+        
+        // Cleanup old hit IDs periodically (keep last 100)
+        if (this._processedHits.size > 100) {
+          const oldest = Array.from(this._processedHits)[0];
+          this._processedHits.delete(oldest);
+        }
+      }
       
       // If we're the target, update our health
       if (targetId === this.sessionId) {
         if (this.localPlayer && this.localPlayer.healthManager) {
+          // Always use the server's value for our own health
           this.localPlayer.healthManager.setHealth(remainingHealth);
         }
         
@@ -450,47 +470,49 @@ export class NetworkManager {
           // Get the current time for time-based reconciliation decisions
           const now = Date.now();
           
-          // Check if we recently predicted damage for this player
-          const recentlyHit = targetPlayer.lastHitTime && (now - targetPlayer.lastHitTime < 3000);
+          // For direct hits where we're the thrower, prefer our prediction if it's close
+          const wasDirectHit = direct === true && sourceId === this.sessionId;
           
-          // Decide whether to use the server value based on:
-          // 1. If we didn't recently hit them, always use server value
-          // 2. If health values differ significantly (more than small rounding errors)
-          const usePredicted = recentlyHit && 
-                              Math.abs(targetPlayer.health - remainingHealth) < 2 && 
-                              targetPlayer.health <= remainingHealth; // Only keep predicted if it's <= server's value
+          if (wasDirectHit) {
+            // For direct hits where we already have a prediction, keep our prediction
+            if (targetPlayer.health <= remainingHealth || 
+                Math.abs(targetPlayer.health - remainingHealth) < 2) {
+              console.log(`Keeping predicted health for ${targetId}: ${targetPlayer.health} (server: ${remainingHealth})`);
+              return;
+            }
+          }
           
-          if (!usePredicted) {
-            console.log(`Reconciling health for player ${targetId}: ${targetPlayer.health} -> ${remainingHealth}`);
-            
-            // Clear the hit prediction data now that we've reconciled
-            targetPlayer.lastHitTime = null;
-            targetPlayer.lastHitDamage = null;
-            
-            // Update player with authoritative server health, but don't show hit effect again if recently hit
-            const showHitEffect = !recentlyHit;
-            
-            // Force update with server values
-            targetPlayer.updateState({
-              health: remainingHealth,
-              // Include other state data to avoid overwriting it
-              x: targetPlayer.currentPosition.x,
-              y: targetPlayer.currentPosition.y, 
-              z: targetPlayer.currentPosition.z,
-              rotationY: targetPlayer.currentRotationY,
-              name: targetPlayer.playerData.name,
-              state: targetPlayer.playerState
-            });
-          } else {
-            // Keep using our predicted value since it's close enough
-            console.log(`Using predicted health for ${targetId}: ${targetPlayer.health} (server: ${remainingHealth})`);
+          // Clear the hit prediction data now that we're updating with server data
+          targetPlayer.lastHitTime = now;
+          targetPlayer.lastHitDamage = amount;
+          
+          console.log(`Updating player ${targetId} health: ${targetPlayer.health} -> ${remainingHealth}`);
+          
+          // Update with server values - use health bar effect for significant changes
+          const showHitEffect = targetPlayer.health - remainingHealth > 5;
+          
+          // Force update with server values
+          targetPlayer.updateState({
+            health: remainingHealth,
+            // Include other state data to avoid overwriting it
+            x: targetPlayer.currentPosition.x,
+            y: targetPlayer.currentPosition.y, 
+            z: targetPlayer.currentPosition.z,
+            rotationY: targetPlayer.currentRotationY,
+            name: targetPlayer.playerData.name,
+            state: targetPlayer.playerState
+          });
+          
+          // If this is a significant health change, force a hit effect
+          if (showHitEffect && targetPlayer.healthBar) {
+            targetPlayer.healthBar.showHitEffect();
           }
         }
       }
       
       // If we're the source, we can show a hit marker or similar
       if (sourceId === this.sessionId) {
-        console.log(`Hit player ${targetId} for ${amount} damage!`);
+        console.log(`Server confirmed hit on player ${targetId} for ${amount} damage!`);
         // Add hit marker
         this.showHitMarker();
       }

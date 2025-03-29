@@ -372,8 +372,33 @@ export class Character {
         if (collidedObject && collidedObject.type === 'player' && !collidedObject.isLocalPlayer) {
             const playerSessionId = collidedObject.sessionId;
             
+            // Get direct reference to player object
+            const player = collidedObject.player;
+            if (!player) return;
+            
             // Check if we're still in cooldown for this player
             const now = Date.now();
+            const cooldownTime = 300; // Shorter cooldown to allow multiple successive hits
+            
+            // Track hit count for this player to show more dramatic effects for multiple hits
+            if (!this.playerHitCounts) this.playerHitCounts = new Map();
+            
+            let consecutiveHits = 1;
+            let lastHitTime = 0;
+            
+            if (this.playerHitCounts.has(playerSessionId)) {
+                const hitData = this.playerHitCounts.get(playerSessionId);
+                lastHitTime = hitData.time;
+                
+                // If hits are within 2 seconds of each other, consider them consecutive
+                if (now - lastHitTime < 2000) {
+                    consecutiveHits = hitData.count + 1;
+                } else {
+                    consecutiveHits = 1;
+                }
+            }
+            
+            // Check cooldown - skip if we're hitting too rapidly
             if (this.hitCooldowns.has(playerSessionId)) {
                 const cooldownEndTime = this.hitCooldowns.get(playerSessionId);
                 if (now < cooldownEndTime) {
@@ -385,37 +410,35 @@ export class Character {
             const damage = this.calculateDamageForItem(itemConfig);
             
             // Set cooldown for this player
-            this.hitCooldowns.set(playerSessionId, now + this.hitCooldownTime);
+            this.hitCooldowns.set(playerSessionId, now + cooldownTime);
             
-            // Get direct reference to player object
-            const player = collidedObject.player;
+            // Update consecutive hit count tracking
+            this.playerHitCounts.set(playerSessionId, {
+                count: consecutiveHits,
+                time: now
+            });
             
-            // Create hit effect on the player
-            this.createHitEffect(collidedObject);
+            // Create hit effect on the player - more particles for consecutive hits
+            this.createHitEffect(collidedObject, consecutiveHits);
             
             // Immediate visual health update - don't wait for server response
-            if (player) {
-                // Record the original health for reconciliation later
-                const originalHealth = player.health;
-                
-                // Calculate and apply immediate visual health update
-                const estimatedRemainingHealth = Math.max(0, player.health - damage);
-                
-                // Store the predicted damage amount for reconciliation
-                player.lastHitDamage = damage;
-                player.lastHitTime = now;
-                
-                // Force an immediate health bar update with the hit effect
-                player.updateState({
-                    health: estimatedRemainingHealth,
-                    x: player.currentPosition.x,
-                    y: player.currentPosition.y,
-                    z: player.currentPosition.z,
-                    rotationY: player.currentRotationY,
-                    name: player.playerData.name,
-                    state: player.playerState
-                });
-            }
+            // Accumulate damage for consecutive hits for smoother visual effect
+            const estimatedRemainingHealth = Math.max(0, player.health - damage);
+            
+            // Store the predicted damage amount for reconciliation
+            player.lastHitTime = now;
+            player.lastHitDamage = damage;
+            
+            // Force an immediate health bar update with the hit effect
+            player.updateState({
+                health: estimatedRemainingHealth,
+                x: player.currentPosition.x,
+                y: player.currentPosition.y,
+                z: player.currentPosition.z,
+                rotationY: player.currentRotationY,
+                name: player.playerData.name,
+                state: player.playerState
+            });
             
             // Send hit to network manager
             if (window.networkManager && window.networkManager.isConnected) {
@@ -423,7 +446,8 @@ export class Character {
                     window.networkManager.sendPlayerHit({
                         targetPlayerId: playerSessionId,
                         damage: damage,
-                        itemType: itemConfig.id || 'tomato'
+                        itemType: itemConfig.id || 'tomato',
+                        hitCount: consecutiveHits  // Send consecutive hit count to server
                     });
                 } catch (error) {
                     console.error('Error sending player hit over network:', error);
@@ -463,12 +487,13 @@ export class Character {
     /**
      * Create a visual hit effect on the player
      * @param {Object} playerObject - The player object that was hit
+     * @param {number} hitCount - The consecutive hit count for this player
      */
-    createHitEffect(playerObject) {
+    createHitEffect(playerObject, hitCount = 1) {
         if (!playerObject || !playerObject.position) return;
         
         // Create particle effect at hit location
-        const particleCount = 20;
+        const particleCount = 10 + (hitCount * 5); // More particles for consecutive hits
         const geometry = new THREE.BufferGeometry();
         const positions = [];
         const velocities = [];
@@ -480,6 +505,16 @@ export class Character {
             playerObject.position.z
         );
         
+        // Different colors for consecutive hits
+        let particleColor = 0xff0000; // Red for first hit
+        
+        // Change colors for consecutive hits
+        if (hitCount >= 3) {
+            particleColor = 0xffff00; // Yellow for 3+ hits
+        } else if (hitCount >= 2) {
+            particleColor = 0xff6600; // Orange for 2 hits
+        }
+        
         for (let i = 0; i < particleCount; i++) {
             // Random position around the hit point
             positions.push(
@@ -488,20 +523,21 @@ export class Character {
                 position.z + (Math.random() - 0.5) * 0.5
             );
             
-            // Random velocity outward
+            // Random velocity outward - faster for consecutive hits
+            const speedMultiplier = 1 + (hitCount * 0.2);
             velocities.push(
-                (Math.random() - 0.5) * 0.08,
-                Math.random() * 0.08,
-                (Math.random() - 0.5) * 0.08
+                (Math.random() - 0.5) * 0.08 * speedMultiplier,
+                Math.random() * 0.08 * speedMultiplier,
+                (Math.random() - 0.5) * 0.08 * speedMultiplier
             );
         }
         
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         
-        // Red particles for hit effect
+        // Particles for hit effect
         const material = new THREE.PointsMaterial({
-            color: 0xff0000,
-            size: 0.05,
+            color: particleColor,
+            size: 0.05 + (hitCount * 0.01), // Larger particles for consecutive hits
             transparent: true,
             opacity: 1
         });
@@ -510,7 +546,7 @@ export class Character {
         this.scene.add(particles);
         
         const startTime = Date.now();
-        const particleDuration = 500;
+        const particleDuration = 500 + (hitCount * 100); // Longer duration for consecutive hits
         
         const animateParticles = () => {
             const elapsed = Date.now() - startTime;
