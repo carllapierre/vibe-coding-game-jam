@@ -42,8 +42,6 @@ export class RadioPlayer {
         
         // Setup user interaction detection to start playback
         this.#setupAutoplayHandler();
-        
-        console.log('Radio player initialized. Will start playing after user interaction.');
     }
     
     /**
@@ -52,7 +50,6 @@ export class RadioPlayer {
     static #setupAutoplayHandler() {
         const startPlayback = () => {
             if (this.#pendingPlay) {
-                console.log('Starting radio playback after user interaction');
                 this.play();
                 this.#pendingPlay = false;
             }

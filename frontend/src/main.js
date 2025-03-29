@@ -60,13 +60,11 @@ document.addEventListener('keydown', (event) => {
             document.body.removeChild(muteStatus);
         }, 1500);
         
-        console.log(`Music ${newMutedState ? 'muted' : 'unmuted'}`);
     }
 });
 
 // Add this global variable to track multiple tabs
 const MULTIPLAYER_TAB_ID = `tab_${Math.random().toString(36).substring(2, 15)}`;
-console.log('Tab ID:', MULTIPLAYER_TAB_ID);
 
 // Flag to enable/disable multiplayer (default to disabled to prevent WebGL context issues)
 const ENABLE_MULTIPLAYER = true; // Set to true only when testing multiplayer specifically
@@ -89,7 +87,6 @@ function createSkybox() {
         ],
         // Success callback
         () => {
-            console.log('Skybox textures loaded successfully');
         },
         // Progress callback
         undefined,
@@ -110,7 +107,6 @@ function createSkybox() {
 function createColorSkybox() {
     // Set a nice sky blue color as background
     scene.background = new THREE.Color(0xe3b152);
-    console.log('Color skybox created');
 }
 
 // Make camera globally accessible for hit markers
@@ -149,7 +145,6 @@ document.addEventListener('visibilitychange', function() {
   documentHidden = document.hidden;
   
   if (!documentHidden && !animationFrameId) {
-    console.log('Tab became visible, resuming animation loop');
     animationFrameId = requestAnimationFrame(animate);
   }
 });
@@ -272,10 +267,8 @@ let networkManager = null;
 // Call this from the initializeMultiplayer function
 async function initializeMultiplayer(character) {
   try {
-    console.log('Initializing multiplayer...');
     
     if (!ENABLE_MULTIPLAYER) {
-      console.log('Multiplayer is disabled. Set ENABLE_MULTIPLAYER = true to enable.');
       return;
     }
     
@@ -286,8 +279,6 @@ async function initializeMultiplayer(character) {
       const playerName = getUsername() || `Player-${Math.floor(Math.random() * 10000)}`;
       
       await networkManager.initialize(playerName, 'character-1');
-      
-      console.log('Multiplayer initialized!');
       
       // The server now supports projectiles, so no warning needed
     }
@@ -333,8 +324,6 @@ async function initializeWorld() {
         await worldManager.loadPosters();
         loadingScreen.updateProgress(90);
         
-        console.log('World loaded successfully');
-        
         // Initialize the radio player
         RadioPlayer.initialize();
         // Set initial volumes
@@ -345,16 +334,13 @@ async function initializeWorld() {
         
         // Initialize multiplayer only if enabled
         if (ENABLE_MULTIPLAYER) {
-            console.log('Initializing multiplayer...');
             try {
                 await initializeMultiplayer(character);
             } catch (error) {
                 console.error('Failed to initialize multiplayer:', error);
                 console.warn('Continuing in single-player mode due to multiplayer error');
             }
-        } else {
-            console.log('Multiplayer disabled - skipping initialization');
-        }
+        } 
         
         loadingScreen.updateProgress(100);
         

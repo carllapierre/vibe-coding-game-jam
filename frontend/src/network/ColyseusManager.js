@@ -66,8 +66,6 @@ export class ColyseusManager extends EventEmitter {
         clientId: this.clientId
       });
       
-      console.log('Connected to Colyseus server:', this.room.sessionId);
-      
       // Set up event listeners for room state changes
       this.setupRoomListeners();
       
@@ -96,9 +94,6 @@ export class ColyseusManager extends EventEmitter {
 
     // Wait for the state to be synchronized
     this.room.onStateChange((state) => {
-      // Log state changes for debugging
-      console.log(`Room state change, players: ${state.players ? state.players.size : 0}`);
-      
       // Set up player listeners only after state is synchronized
       if (state && state.players) {
         // Create a set of current players to track removed ones
@@ -116,7 +111,6 @@ export class ColyseusManager extends EventEmitter {
           
           // Add to remote players and emit join event
           if (!this.remotePlayers[sessionId]) {
-            console.log(`Adding remote player: ${sessionId}`);
             this.remotePlayers[sessionId] = player;
             this.emit('playerJoined', { sessionId, player });
             this.setupPlayerListeners(player, sessionId);
@@ -126,7 +120,6 @@ export class ColyseusManager extends EventEmitter {
         // Check for players that have been removed from state but still in remotePlayers
         Object.keys(this.remotePlayers).forEach(sessionId => {
           if (!currentPlayers.has(sessionId) && sessionId !== this.room.sessionId) {
-            console.log(`Player ${sessionId} no longer in state, cleaning up`);
             this.emit('playerLeft', { sessionId, player: this.remotePlayers[sessionId] });
             delete this.remotePlayers[sessionId];
           }
@@ -138,7 +131,6 @@ export class ColyseusManager extends EventEmitter {
           this._hasSetupPlayerHandlers = true;
           
           state.players.onAdd = (player, sessionId) => {
-            console.log(`Player added to state: ${sessionId}`);
             // Skip if it's the local player
             if (sessionId === this.room.sessionId) {
               this.emit('currentPlayer', player);
@@ -152,7 +144,6 @@ export class ColyseusManager extends EventEmitter {
           };
           
           state.players.onRemove = (player, sessionId) => {
-            console.log(`Player removed from state: ${sessionId}`);
             delete this.remotePlayers[sessionId];
             this.emit('playerLeft', { sessionId, player });
           };
@@ -168,7 +159,6 @@ export class ColyseusManager extends EventEmitter {
 
     // Listen for room leave
     this.room.onLeave((code) => {
-      console.log('Left Colyseus room:', code);
       this.emit('disconnected');
       
       // Try to reconnect if unexpected disconnect
@@ -193,7 +183,6 @@ export class ColyseusManager extends EventEmitter {
    */
   async reconnect() {
     try {
-      console.log('Attempting to reconnect to server...');
       
       // Only attempt to reconnect if we're not already connected
       if (this.room) {
