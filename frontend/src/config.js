@@ -16,6 +16,16 @@ export const inventory = {
     stackLimit: 32,     // Maximum number of items in a stack
 };
 
+// Character state settings
+export const character = {
+    states: {
+        hit: {
+            duration: 0.2, // Duration in seconds for hit state
+            animationSpeed: 2.2 // Speed multiplier for hit animation
+        }
+    }
+};
+
 export const spawner = {
     colors: {
         boost: 0x00ff00, //green

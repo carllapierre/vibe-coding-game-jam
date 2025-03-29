@@ -457,6 +457,11 @@ export class NetworkManager {
         if (this.localPlayer && this.localPlayer.healthManager) {
           // Always use the server's value for our own health
           this.localPlayer.healthManager.setHealth(remainingHealth);
+          
+          // Trigger hit state when we take damage
+          if (this.localPlayer.setHitState) {
+            this.localPlayer.setHitState();
+          }
         }
         
         console.log(`You were hit for ${amount} damage! Health: ${remainingHealth}`);
@@ -500,7 +505,7 @@ export class NetworkManager {
             z: targetPlayer.currentPosition.z,
             rotationY: targetPlayer.currentRotationY,
             name: targetPlayer.playerData.name,
-            state: targetPlayer.playerState
+            state: 'hit' // Set state to hit when taking damage
           });
           
           // If this is a significant health change, force a hit effect

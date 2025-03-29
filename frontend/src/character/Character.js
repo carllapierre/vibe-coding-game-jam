@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
-import { api } from '../config.js';
+import { api, character } from '../config.js';
 
 // Health Manager class for handling character health
 class HealthManager {
-    constructor(maxHealth = 100) {
+    constructor(maxHealth = 100, character) {
         this.maxHealth = maxHealth;
         this.currentHealth = maxHealth;
         this.healthChangeCallbacks = [];
+        this.character = character; // Reference to the character
     }
 
     getHealth() {
@@ -38,6 +39,10 @@ class HealthManager {
         this.currentHealth = Math.max(0, this.currentHealth - amount);
         if (prevHealth !== this.currentHealth) {
             this.notifyHealthChange();
+            // Trigger hit state when taking damage
+            if (this.character) {
+                this.character.setHitState();
+            }
         }
         return this.currentHealth;
     }
@@ -69,8 +74,8 @@ export class Character {
         this.collidableObjects = collidableObjects;
         this.enabled = true;
         
-        // Initialize health manager
-        this.healthManager = new HealthManager(100);
+        // Initialize health manager with reference to this character
+        this.healthManager = new HealthManager(100, this);
         
         // Player state tracking
         this.playerState = 'idle';
@@ -155,6 +160,10 @@ export class Character {
         this.networkedPlayers = [];
         this.hitCooldowns = new Map(); // Map to track cooldowns for hits
         this.hitCooldownTime = 1000; // 1 second cooldown between hits on the same player
+
+        // Add hit state tracking
+        this.isInHitState = false;
+        this.hitStateStartTime = 0;
     }
 
     setEnabled(enabled) {
@@ -1168,6 +1177,19 @@ export class Character {
     updateMovement() {
         const currentPosition = this.camera.position.clone();
         
+        // Check if we're in hit state
+        if (this.isInHitState) {
+            const elapsed = (Date.now() - this.hitStateStartTime) / 1000; // Convert to seconds
+            if (elapsed >= character.states.hit.duration) {
+                this.isInHitState = false;
+                // Reset to idle state after hit state
+                this.playerState = 'idle';
+            } else {
+                // Don't process movement while in hit state
+                return;
+            }
+        }
+        
         // Process jump input
         if (this.keys[' ']) {
             // If we can jump or were recently able to jump (small grace period for more responsive jumping)
@@ -1541,6 +1563,22 @@ export class Character {
             type: 'player',
             isLocalPlayer: true
         };
+    }
+
+    /**
+     * Set the character to the hit state
+     */
+    setHitState() {
+        if (!this.isInHitState) {
+            this.isInHitState = true;
+            this.hitStateStartTime = Date.now();
+            this.playerState = 'hit';
+            
+            // Send player state update over network
+            if (window.networkManager && window.networkManager.isConnected) {
+                window.networkManager.sendPlayerState(this.playerState);
+            }
+        }
     }
 
 } 
