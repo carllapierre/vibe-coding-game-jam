@@ -20,6 +20,10 @@ import { initializeFromUrlParams, getUsername } from './utils/urlParams.js';
 import { HitMarker } from './projectiles/HitMarker.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { RadioPlayer } from './audio/RadioPlayer.js';
+import { LoadingScreen } from './ui/LoadingScreen.js';
+
+// Create loading screen
+const loadingScreen = new LoadingScreen();
 
 // Initialize WebGL tracking
 initWebGLTracker();
@@ -295,28 +299,49 @@ async function initializeMultiplayer(character) {
 // Load the world after all registries are initialized
 async function initializeWorld() {
     try {
+        // Show loading screen
+        loadingScreen.show();
+        loadingScreen.updateProgress(5);
+        
         // Create skybox
-        createSkybox();
+        await new Promise(resolve => {
+            setTimeout(() => {
+                createSkybox();
+                loadingScreen.updateProgress(15);
+                resolve();
+            }, 100);
+        });
         
         // Load all objects from the world
+        loadingScreen.updateProgress(20);
         await worldManager.loadObjects();
+        loadingScreen.updateProgress(50);
+        
         collidableObjects = worldManager.getCollidableObjects();
         // Update character's collidable objects reference
         character.collidableObjects = collidableObjects;
         // Update FoodProjectile's static collidable objects
         FoodProjectile.updateCollidableObjects(collidableObjects);
+        
+        loadingScreen.updateProgress(60);
+        
         // Initialize spawners after objects are loaded
         await worldManager.initializeSpawners(character);
+        loadingScreen.updateProgress(75);
+        
         // Load posters
         await worldManager.loadPosters();
+        loadingScreen.updateProgress(90);
         
         console.log('World loaded successfully');
         
         // Initialize the radio player
         RadioPlayer.initialize();
         // Set initial volumes
-        RadioPlayer.setVolume(0.005); // Start at 7% volume for background music
+        RadioPlayer.setVolume(0.005); // Start at low volume for background music
         AudioManager.setSfxVolume(0.07); // Start at 70% volume for sound effects
+        
+        loadingScreen.updateProgress(95);
         
         // Initialize multiplayer only if enabled
         if (ENABLE_MULTIPLAYER) {
@@ -331,10 +356,21 @@ async function initializeWorld() {
             console.log('Multiplayer disabled - skipping initialization');
         }
         
-        // Start animation loop after world and multiplayer are initialized
-        animationFrameId = requestAnimationFrame(animate);
+        loadingScreen.updateProgress(100);
+        
+        // Give a brief moment to see 100% before hiding
+        setTimeout(() => {
+            // Hide loading screen
+            loadingScreen.hide();
+            
+            // Start animation loop after world and multiplayer are initialized
+            animationFrameId = requestAnimationFrame(animate);
+        }, 500);
     } catch (error) {
         console.error("Error initializing world:", error);
+        // Hide loading screen in case of error
+        loadingScreen.hide();
+        
         // Show error to user
         const errorOverlay = document.createElement('div');
         errorOverlay.style.position = 'fixed';
@@ -472,10 +508,17 @@ function frameStep(currentTime) {
     postProcessing.render();
 }
 
-// Start initialization
-initializeWorld().catch(error => {
-    console.error("Error in initializeWorld:", error);
-});
+// Show loading screen immediately
+loadingScreen.show();
+loadingScreen.updateProgress(2);
+
+// Start initialization after a small delay to ensure loading screen is visible
+setTimeout(() => {
+    initializeWorld().catch(error => {
+        console.error("Error in initializeWorld:", error);
+        loadingScreen.hide();
+    });
+}, 100);
 
 // Add cleanup on window unload
 window.addEventListener('beforeunload', () => {
