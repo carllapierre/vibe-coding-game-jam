@@ -29,7 +29,6 @@ export class PosterObject extends THREE.Group {
             return;
         }
 
-        console.log(`Creating poster ${posterId} with instanceIndex ${this.userData.instanceIndex}`);
 
         // Create poster visuals
         this.createPosterVisuals();
@@ -87,12 +86,10 @@ export class PosterObject extends THREE.Group {
             return;
         }
         
-        console.log(`Loading poster texture from path: ${imagePath}`);
         
         // Manually test if the image can be loaded
         const testImage = new Image();
         testImage.onload = () => {
-            console.log(`TEST: Image loaded successfully for ${this.posterData.id} (${testImage.width}x${testImage.height})`);
             
             // Adapt frame to image aspect ratio
             this.adaptFrameToImageAspectRatio(testImage.width, testImage.height);
@@ -218,7 +215,6 @@ export class PosterObject extends THREE.Group {
             this.poster.material = posterMaterial;
         }
         
-        console.log(`Created fallback texture for ${this.posterData.id}`);
     }
 
     /**
@@ -377,8 +373,6 @@ export class PosterObject extends THREE.Group {
         const frameWidth = posterWidth + frameMargin * 2;
         const frameHeight = posterHeight + frameMargin * 2;
         
-        console.log(`Adapting frame to image aspect ratio: ${aspectRatio} (${imageWidth}x${imageHeight})`);
-        console.log(`New dimensions - Frame: ${frameWidth}x${frameHeight}, Poster: ${posterWidth}x${posterHeight}`);
         
         // Update frame geometry
         if (this.frame) {
