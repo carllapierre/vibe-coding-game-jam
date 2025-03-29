@@ -109,6 +109,42 @@ export class LobbyRoom extends Room<LobbyState> {
         console.log(`Player ${client.sessionId} state updated to: ${message.state}`);
       }
     });
+    
+    this.onMessage("playerHit", (client, message) => {
+      const { targetId, damage, itemType, sourceId } = message;
+      const targetPlayer = this.state.players.get(targetId);
+      const sourcePlayer = this.state.players.get(sourceId || client.sessionId);
+      
+      if (!targetPlayer || !sourcePlayer) {
+        console.log(`Invalid players for hit: source=${sourceId}, target=${targetId}`);
+        return;
+      }
+      
+      console.log(`Processing hit: ${sourceId} -> ${targetId} for ${damage} damage with ${itemType}`);
+      
+      // Update target player's health
+      targetPlayer.health = Math.max(0, targetPlayer.health - damage);
+      console.log(`${targetId}'s health reduced to ${targetPlayer.health}`);
+      
+      // If player health is depleted
+      if (targetPlayer.health <= 0) {
+        // Increment score for the source player
+        sourcePlayer.score += 10; // 10 points for a kill
+        console.log(`${sourceId}'s score increased to ${sourcePlayer.score}`);
+        
+        // Schedule respawn
+        this.respawnPlayer(targetPlayer);
+      }
+      
+      // Broadcast damage event to all clients
+      this.broadcast("playerDamaged", {
+        targetId: targetId,
+        sourceId: sourceId || client.sessionId,
+        damage: damage,
+        itemType: itemType,
+        remainingHealth: targetPlayer.health
+      });
+    });
   }
 
   /**

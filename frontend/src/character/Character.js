@@ -150,6 +150,11 @@ export class Character {
                 this.hideLoadingScreen();
             }
         }, 500);
+
+        // Network players hit detection
+        this.networkedPlayers = [];
+        this.hitCooldowns = new Map(); // Map to track cooldowns for hits
+        this.hitCooldownTime = 1000; // 1 second cooldown between hits on the same player
     }
 
     setEnabled(enabled) {
@@ -316,7 +321,8 @@ export class Character {
             speed: 0.5,
             gravity: 0.01,
             arcHeight: 0.2,
-            lifetime: 5000
+            lifetime: 5000,
+            onCollision: (collidedObject) => this.handleProjectileCollision(collidedObject, itemConfig)
         });
         
         FoodProjectile.registerProjectile(projectile);
@@ -356,6 +362,189 @@ export class Character {
         }
     }
     
+    /**
+     * Handle projectile collision with an object
+     * @param {Object} collidedObject - The object the projectile collided with
+     * @param {Object} itemConfig - The configuration of the thrown item
+     */
+    handleProjectileCollision(collidedObject, itemConfig) {
+        // Check if the collided object is a networked player
+        if (collidedObject && collidedObject.type === 'player' && !collidedObject.isLocalPlayer) {
+            const playerSessionId = collidedObject.sessionId;
+            
+            // Check if we're still in cooldown for this player
+            const now = Date.now();
+            if (this.hitCooldowns.has(playerSessionId)) {
+                const cooldownEndTime = this.hitCooldowns.get(playerSessionId);
+                if (now < cooldownEndTime) {
+                    return; // Still in cooldown, skip this hit
+                }
+            }
+            
+            // Calculate damage based on item properties - should match server-side calculation
+            const damage = this.calculateDamageForItem(itemConfig);
+            
+            // Set cooldown for this player
+            this.hitCooldowns.set(playerSessionId, now + this.hitCooldownTime);
+            
+            // Get direct reference to player object
+            const player = collidedObject.player;
+            
+            // Create hit effect on the player
+            this.createHitEffect(collidedObject);
+            
+            // Immediate visual health update - don't wait for server response
+            if (player) {
+                // Record the original health for reconciliation later
+                const originalHealth = player.health;
+                
+                // Calculate and apply immediate visual health update
+                const estimatedRemainingHealth = Math.max(0, player.health - damage);
+                
+                // Store the predicted damage amount for reconciliation
+                player.lastHitDamage = damage;
+                player.lastHitTime = now;
+                
+                // Force an immediate health bar update with the hit effect
+                player.updateState({
+                    health: estimatedRemainingHealth,
+                    x: player.currentPosition.x,
+                    y: player.currentPosition.y,
+                    z: player.currentPosition.z,
+                    rotationY: player.currentRotationY,
+                    name: player.playerData.name,
+                    state: player.playerState
+                });
+            }
+            
+            // Send hit to network manager
+            if (window.networkManager && window.networkManager.isConnected) {
+                try {
+                    window.networkManager.sendPlayerHit({
+                        targetPlayerId: playerSessionId,
+                        damage: damage,
+                        itemType: itemConfig.id || 'tomato'
+                    });
+                } catch (error) {
+                    console.error('Error sending player hit over network:', error);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Calculate damage for a specific item using the same formula as the server
+     * @param {Object} itemConfig - The item configuration 
+     * @returns {number} - The calculated damage amount
+     */
+    calculateDamageForItem(itemConfig) {
+        // Default damage values based on item type
+        const damageMap = {
+            'tomato': 10,
+            'apple': 15,
+            'banana': 8,
+            'watermelon': 25,
+            'pineapple': 20,
+            'cake': 30
+        };
+        
+        // Use item-specific damage if available, otherwise look it up in the map
+        const itemId = itemConfig.id || 'tomato';
+        
+        // If the item has explicit damage property, use that
+        if (itemConfig.damage !== undefined) {
+            return itemConfig.damage;
+        }
+        
+        // Otherwise use the damage map or default to 10
+        return damageMap[itemId] || 10;
+    }
+    
+    /**
+     * Create a visual hit effect on the player
+     * @param {Object} playerObject - The player object that was hit
+     */
+    createHitEffect(playerObject) {
+        if (!playerObject || !playerObject.position) return;
+        
+        // Create particle effect at hit location
+        const particleCount = 20;
+        const geometry = new THREE.BufferGeometry();
+        const positions = [];
+        const velocities = [];
+        
+        // Use the player's position for the hit effect
+        const position = new THREE.Vector3(
+            playerObject.position.x,
+            playerObject.position.y + 1.5, // Aim for mid-body
+            playerObject.position.z
+        );
+        
+        for (let i = 0; i < particleCount; i++) {
+            // Random position around the hit point
+            positions.push(
+                position.x + (Math.random() - 0.5) * 0.5,
+                position.y + (Math.random() - 0.5) * 0.5,
+                position.z + (Math.random() - 0.5) * 0.5
+            );
+            
+            // Random velocity outward
+            velocities.push(
+                (Math.random() - 0.5) * 0.08,
+                Math.random() * 0.08,
+                (Math.random() - 0.5) * 0.08
+            );
+        }
+        
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        
+        // Red particles for hit effect
+        const material = new THREE.PointsMaterial({
+            color: 0xff0000,
+            size: 0.05,
+            transparent: true,
+            opacity: 1
+        });
+        
+        const particles = new THREE.Points(geometry, material);
+        this.scene.add(particles);
+        
+        const startTime = Date.now();
+        const particleDuration = 500;
+        
+        const animateParticles = () => {
+            const elapsed = Date.now() - startTime;
+            const positions = geometry.attributes.position.array;
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] += velocities[i * 3];
+                positions[i * 3 + 1] += velocities[i * 3 + 1];
+                positions[i * 3 + 2] += velocities[i * 3 + 2];
+            }
+            
+            geometry.attributes.position.needsUpdate = true;
+            material.opacity = 1 - (elapsed / particleDuration);
+            
+            if (elapsed < particleDuration) {
+                requestAnimationFrame(animateParticles);
+            } else {
+                this.scene.remove(particles);
+                geometry.dispose();
+                material.dispose();
+            }
+        };
+        
+        animateParticles();
+    }
+    
+    /**
+     * Set the networked players for hit detection
+     * @param {Array} players - Array of networked players
+     */
+    setNetworkedPlayers(players) {
+        this.networkedPlayers = players;
+    }
+
     // Default consume method
     consumeItem(itemConfig) {
         // Get default or custom health bonus

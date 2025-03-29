@@ -4,6 +4,7 @@ import { gsap } from 'gsap';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterRegistry } from '../registries/CharacterRegistry.js';
 import { NameTag } from './NameTag.js';
+import { HealthBar } from './HealthBar.js';
 import { AnimationManager } from './AnimationManager.js';
 
 /**
@@ -84,12 +85,57 @@ export class NetworkedPlayerManager {
   }
   
   /**
+   * Get all collision boxes for hit detection
+   * @returns {Array} Array of collision boxes from all players
+   */
+  getCollisionBoxes() {
+    const boxes = [];
+    for (const player of this.players.values()) {
+      const box = player.getCollisionBox();
+      if (box) {
+        boxes.push(box);
+      }
+    }
+    return boxes;
+  }
+  
+  /**
+   * Register this manager's collision boxes with the FoodProjectile system
+   * @param {class} FoodProjectile - The FoodProjectile class 
+   */
+  registerWithProjectileSystem(FoodProjectile) {
+    if (!FoodProjectile || !FoodProjectile.updateCollidableObjects) {
+      console.error('Invalid FoodProjectile class provided');
+      return;
+    }
+
+    // Function to update projectile system with current player boxes
+    const updateProjectileCollisions = () => {
+      const boxes = this.getCollisionBoxes();
+      // Add these boxes to any existing collidable objects
+      const allCollidables = [...FoodProjectile.collidableObjects.filter(obj => obj.type !== 'player'), ...boxes];
+      FoodProjectile.updateCollidableObjects(allCollidables);
+    };
+    
+    // Update immediately and then every frame
+    updateProjectileCollisions();
+    
+    // Store the update function so it can be called in the update method
+    this.updateProjectileCollisions = updateProjectileCollisions;
+  }
+  
+  /**
    * Update all players (called in animation loop)
    * @param {number} delta - Time delta since last update
    */
   update(delta) {
     for (const player of this.players.values()) {
       player.update(delta);
+    }
+    
+    // Update projectile collisions if we're registered
+    if (this.updateProjectileCollisions) {
+      this.updateProjectileCollisions();
     }
   }
   
@@ -174,6 +220,17 @@ export class NetworkedPlayer {
     
     // Create name tag
     this.nameTag = new NameTag();
+    
+    // Create health bar
+    this.healthBar = new HealthBar();
+    
+    // Store health values
+    this.health = this.playerData.health || 100;
+    this.maxHealth = 100;
+    
+    // Hit prediction properties for reconciliation
+    this.lastHitTime = null;
+    this.lastHitDamage = null;
     
     // Select a random character ID for this player
     this.characterId = this.getRandomCharacterId();
@@ -260,6 +317,9 @@ export class NetworkedPlayer {
       
       // Now that model is loaded, add the name tag
       this.updateNameTag();
+      
+      // Add the health bar
+      this.updateHealthBar();
     }, undefined, (error) => {
       console.error('Error loading character model:', error);
     });
@@ -320,6 +380,35 @@ export class NetworkedPlayer {
     
     if (this.model) {
       this.nameTag.create(this.model, displayName);
+    }
+  }
+  
+  /**
+   * Create and update the health bar
+   * @param {boolean} showHitEffect - Whether to show a hit effect
+   */
+  updateHealthBar(showHitEffect = false) {
+    if (!this.healthBar) return;
+    
+    // Get current health values from player data
+    const currentHealth = this.playerData.health !== undefined ? this.playerData.health : this.health;
+    
+    if (this.model) {
+      // If the health bar hasn't been created yet, create it
+      if (!this.healthBar.sprite) {
+        this.healthBar.create(this.model, currentHealth, this.maxHealth);
+      } else {
+        // Immediate texture update for faster visual feedback
+        this.healthBar.draw(currentHealth, this.maxHealth);
+        
+        // Then trigger the animation effect if needed
+        if (showHitEffect) {
+          this.healthBar.showHitEffect();
+        }
+      }
+      
+      // Store current health
+      this.health = currentHealth;
     }
   }
   
@@ -386,6 +475,15 @@ export class NetworkedPlayer {
       if (state.state !== undefined) {
         this.playerState = state.state;
         this.updateAnimationState(this.playerState);
+      }
+      
+      // Update health if provided
+      if (state.health !== undefined && state.health !== this.health) {
+        const prevHealth = this.health;
+        this.playerData.health = state.health;
+        // Show hit effect if health decreased
+        const showHitEffect = state.health < prevHealth;
+        this.updateHealthBar(showHitEffect);
       }
       
       // Add to position buffer for smoothing
@@ -655,6 +753,12 @@ export class NetworkedPlayer {
         this.nameTag.dispose();
         this.nameTag = null;
       }
+      
+      // Clean up health bar
+      if (this.healthBar) {
+        this.healthBar.dispose();
+        this.healthBar = null;
+      }
     } catch (error) {
       console.error('Error disposing NetworkedPlayer:', error);
     }
@@ -665,5 +769,22 @@ export class NetworkedPlayer {
    */
   remove() {
     this.dispose();
+  }
+  
+  /**
+   * Get the bounding box for collision detection
+   * @returns {Object} Object with box and meshes properties
+   */
+  getCollisionBox() {
+    if (!this.boxMesh) return null;
+    
+    return {
+      box: new THREE.Box3().setFromObject(this.boxMesh),
+      meshes: [this.boxMesh],
+      type: 'player',
+      player: this,
+      sessionId: this.sessionId,
+      position: this.model ? this.model.position : this.currentPosition
+    };
   }
 } 

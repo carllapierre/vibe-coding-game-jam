@@ -25,7 +25,7 @@ export class FoodProjectile {
         }
     }
 
-    constructor({ scene, position, direction, path, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000 }) {
+    constructor({ scene, position, direction, path, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000, onCollision = null }) {
         this.scene = scene;
         this.position = position;
         this.direction = direction;
@@ -37,6 +37,7 @@ export class FoodProjectile {
         this.spawnTime = Date.now();
         this.velocity = new THREE.Vector3();
         this.scale = scale;
+        this.onCollision = onCollision;
         
         // Set initial velocity with arc
         this.velocity.copy(direction).multiplyScalar(speed);
@@ -163,6 +164,11 @@ export class FoodProjectile {
         }
 
         if (collision) {
+            // If we have a collision callback, call it with the collided object
+            if (this.onCollision && typeof this.onCollision === 'function') {
+                this.onCollision(collision.object);
+            }
+            
             // Create the appropriate hit marker effect based on what was hit
             if (collision.object.type === 'player') {
                 if (collision.object.player) {

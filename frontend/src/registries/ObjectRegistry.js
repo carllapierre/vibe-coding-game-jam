@@ -31,6 +31,8 @@ export class ObjectRegistry extends Registry {
         { id: 'shopping-basket', model: 'shopping-basket.glb', scale: 1.0 },
         { id: 'shopping-cart', model: 'shopping-cart.glb', scale: 1.0 },
 
+        { id: 'vibermart', model: 'vibermart.glb', scale: 1.0 },
+
         // Objects
         { id: 'wholer-ham', model: 'wholer-ham.glb', scale: 1.0, pathOverride: 'objects/' },
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ColyseusManager } from './ColyseusManager.js';
 import { NetworkedPlayerManager } from '../character/NetworkedPlayer.js';
 import { NetworkedProjectile } from '../projectiles/NetworkedProjectile.js';
+import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 
 /**
  * NetworkManager integrates multiplayer functionality into the game.
@@ -93,6 +94,14 @@ export class NetworkManager {
       // Start sending local player updates only after successful connection
       if (this.isConnected) {
         this.startSendingUpdates();
+      }
+      
+      // Register NetworkedPlayerManager with the FoodProjectile system for collision detection
+      this.playerManager.registerWithProjectileSystem(FoodProjectile);
+      
+      // Connect local player with NetworkedPlayerManager
+      if (this.localPlayer) {
+        this.localPlayer.setNetworkedPlayers(this.playerManager.players);
       }
       
       // Make NetworkManager globally available for projectile sending
@@ -422,7 +431,7 @@ export class NetworkManager {
    */
   onPlayerDamaged(data) {
     try {
-      const { targetId, sourceId, amount, remainingHealth } = data;
+      const { targetId, sourceId, amount, remainingHealth, itemType } = data;
       
       // If we're the target, update our health
       if (targetId === this.sessionId) {
@@ -434,6 +443,49 @@ export class NetworkManager {
         
         // Add hit effect
         this.showDamageEffect();
+      } else {
+        // If it's another player, update their health in the player manager
+        const targetPlayer = this.playerManager.players.get(targetId);
+        if (targetPlayer) {
+          // Get the current time for time-based reconciliation decisions
+          const now = Date.now();
+          
+          // Check if we recently predicted damage for this player
+          const recentlyHit = targetPlayer.lastHitTime && (now - targetPlayer.lastHitTime < 3000);
+          
+          // Decide whether to use the server value based on:
+          // 1. If we didn't recently hit them, always use server value
+          // 2. If health values differ significantly (more than small rounding errors)
+          const usePredicted = recentlyHit && 
+                              Math.abs(targetPlayer.health - remainingHealth) < 2 && 
+                              targetPlayer.health <= remainingHealth; // Only keep predicted if it's <= server's value
+          
+          if (!usePredicted) {
+            console.log(`Reconciling health for player ${targetId}: ${targetPlayer.health} -> ${remainingHealth}`);
+            
+            // Clear the hit prediction data now that we've reconciled
+            targetPlayer.lastHitTime = null;
+            targetPlayer.lastHitDamage = null;
+            
+            // Update player with authoritative server health, but don't show hit effect again if recently hit
+            const showHitEffect = !recentlyHit;
+            
+            // Force update with server values
+            targetPlayer.updateState({
+              health: remainingHealth,
+              // Include other state data to avoid overwriting it
+              x: targetPlayer.currentPosition.x,
+              y: targetPlayer.currentPosition.y, 
+              z: targetPlayer.currentPosition.z,
+              rotationY: targetPlayer.currentRotationY,
+              name: targetPlayer.playerData.name,
+              state: targetPlayer.playerState
+            });
+          } else {
+            // Keep using our predicted value since it's close enough
+            console.log(`Using predicted health for ${targetId}: ${targetPlayer.health} (server: ${remainingHealth})`);
+          }
+        }
       }
       
       // If we're the source, we can show a hit marker or similar
@@ -455,6 +507,11 @@ export class NetworkManager {
     try {
       // Update remote player animations
       this.playerManager.update(delta);
+      
+      // Sync networked players with local character for hit detection
+      if (this.localPlayer && typeof this.localPlayer.setNetworkedPlayers === 'function') {
+        this.localPlayer.setNetworkedPlayers(this.playerManager.getCollisionBoxes());
+      }
       
       // Update networked projectiles
       if (this.isServerReadyForProjectiles) {
@@ -539,6 +596,35 @@ export class NetworkManager {
       console.log('NetworkManager disposed');
     } catch (error) {
       console.error('Error disposing NetworkManager:', error);
+    }
+  }
+  
+  /**
+   * Send player hit information to server
+   * @param {Object} data - Hit data with targetPlayerId, damage and itemType
+   */
+  sendPlayerHit(data) {
+    if (!this.isConnected || !data.targetPlayerId) {
+      console.error('Cannot send player hit: not connected or missing target player ID');
+      return;
+    }
+    
+    try {
+      // Send hit data to server
+      this.colyseusManager.send('playerHit', {
+        targetId: data.targetPlayerId,
+        damage: data.damage || 10,
+        itemType: data.itemType || 'tomato',
+        sourceId: this.sessionId
+      });
+      
+      console.log('Sent player hit:', data);
+      
+      // Show hit marker UI
+      this.showHitMarker();
+      
+    } catch (error) {
+      console.error('Error sending player hit:', error);
     }
   }
 } 

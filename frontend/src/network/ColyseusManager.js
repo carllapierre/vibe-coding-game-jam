@@ -478,6 +478,24 @@ export class ColyseusManager extends EventEmitter {
   }
   
   /**
+   * Send a general message to the server
+   * @param {string} type - Message type
+   * @param {Object} data - Message data
+   */
+  send(type, data) {
+    if (!this.room) {
+      console.error(`Cannot send ${type}: not connected to room`);
+      return;
+    }
+    
+    try {
+      this.room.send(type, data);
+    } catch (error) {
+      console.error(`Error sending ${type} message:`, error);
+    }
+  }
+  
+  /**
    * Disconnect from the Colyseus server and clean up
    */
   disconnect() {
