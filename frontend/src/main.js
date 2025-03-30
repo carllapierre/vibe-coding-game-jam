@@ -21,6 +21,12 @@ import { HitMarker } from './projectiles/HitMarker.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { RadioPlayer } from './audio/RadioPlayer.js';
 import { LoadingScreen } from './ui/LoadingScreen.js';
+import assetManager from './utils/AssetManager.js';
+
+// Enable THREE.Cache for efficient asset loading
+// This will prevent duplicate loading of the same resources
+THREE.Cache.enabled = true;
+console.log('THREE.Cache enabled:', THREE.Cache.enabled);
 
 // Create loading screen
 const loadingScreen = new LoadingScreen();
@@ -77,26 +83,28 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 function createSkybox() {
     // Try loading texture-based skybox
     try {
-        const loader = new THREE.CubeTextureLoader();
-        loader.setPath(assetPath('skybox/'));
-        
-        const skyboxTexture = loader.load([
+        const skyboxPaths = [
             'right.jpg', 'left.jpg',
             'top.jpg', 'bottom.jpg',
             'front.jpg', 'back.jpg'
-        ],
-        // Success callback
-        () => {
-        },
-        // Progress callback
-        undefined,
-        // Error callback - fallback to color skybox
-        (err) => {
-            console.warn('Failed to load skybox textures, using color skybox instead:', err);
-            createColorSkybox();
-        });
+        ];
         
-        scene.background = skyboxTexture;
+        // Use AssetManager to load the skybox with caching
+        assetManager.cubeTextureLoader.setPath(assetPath('skybox/'));
+        const skyboxTexture = assetManager.loadCubeTexture(
+            skyboxPaths,
+            // Success callback
+            (texture) => {
+                scene.background = texture;
+            },
+            // Progress callback
+            undefined,
+            // Error callback - fallback to color skybox
+            (err) => {
+                console.warn('Failed to load skybox textures, using color skybox instead:', err);
+                createColorSkybox();
+            }
+        );
     } catch (error) {
         console.warn('Error creating texture skybox, falling back to color skybox:', error);
         createColorSkybox();

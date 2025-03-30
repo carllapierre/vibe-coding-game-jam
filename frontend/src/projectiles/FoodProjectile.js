@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { HitMarker } from './HitMarker.js';
+import assetManager from '../utils/AssetManager.js';
 
 export class FoodProjectile {
     static activeProjectiles = [];
@@ -43,9 +44,8 @@ export class FoodProjectile {
         this.velocity.copy(direction).multiplyScalar(speed);
         this.velocity.y += arcHeight;
         
-        // Load the model
-        const loader = new GLTFLoader();
-        loader.load(path, (gltf) => {
+        // Load the model using AssetManager
+        assetManager.loadModel(path, (gltf) => {
             this.model = gltf.scene;
             this.model.scale.set(scale, scale, scale);
             this.model.position.copy(position);

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
 import { ItemRegistry } from './../registries/ItemRegistry.js';
+import assetManager from '../utils/AssetManager.js';
 
 export class Spawnable {
     constructor(position, itemId) {
@@ -49,12 +50,11 @@ export class Spawnable {
     }
 
     loadModel() {
-        const loader = new GLTFLoader();
-        
         // Determine which path to use for the model
         const modelPath = this.itemConfig ? this.itemConfig.modelPath : this.config.modelPath;
         
-        loader.load(
+        // Use AssetManager to load the model with caching
+        assetManager.loadModel(
             modelPath,
             (gltf) => {
                 this.model = gltf.scene;
@@ -63,14 +63,13 @@ export class Spawnable {
                 // Position the model
                 this.model.position.copy(this.position);
                 
-                
                 // If we already have a scene, add the model immediately
                 if (this.scene) {
                     this.scene.add(this.model);
                 }
             },
-            (progress) => {
-            },
+            // Progress callback
+            undefined,
             (error) => {
                 console.error('Error loading food model:', error);
             }

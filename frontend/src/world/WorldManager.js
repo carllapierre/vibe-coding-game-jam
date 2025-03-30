@@ -6,19 +6,16 @@ import { ObjectRegistry } from '../registries/ObjectRegistry.js';
 import { SpawnerRegistry } from '../registries/SpawnerRegistry.js';
 import { SpawnableRegistry } from '../registries/SpawnableRegistry.js';
 import { spawner as spawnerConfig } from '../config.js';
+import assetManager from '../utils/AssetManager.js';
 
 export class WorldManager {
     constructor(scene) {
         this.scene = scene;
-        this.loader = new GLTFLoader();
         this.worldData = null;
         this.collidableObjects = [];
         this.boundingBoxHelpers = [];
         this.showHitboxes = false;
         this.spawners = [];
-        
-        // Cache for model loading
-        this.modelCache = new Map();
         
         // Frustum culling
         this.frustum = new THREE.Frustum();
@@ -304,15 +301,9 @@ export class WorldManager {
     }
 
     async loadModel(path) {
-        // Check cache first
-        if (this.modelCache.has(path)) {
-            return this.modelCache.get(path).clone();
-        }
-
+        // Use AssetManager to load and cache the model instead of our own implementation
         return new Promise((resolve, reject) => {
-            this.loader.load(path, (gltf) => {
-                // Store in cache
-                this.modelCache.set(path, gltf.scene.clone());
+            assetManager.loadModel(path, (gltf) => {
                 resolve(gltf);
             }, undefined, reject);
         });

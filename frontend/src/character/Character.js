@@ -3,6 +3,7 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { api, character } from '../config.js';
+import assetManager from '../utils/AssetManager.js';
 
 // Health Manager class for handling character health
 class HealthManager {
@@ -201,11 +202,13 @@ export class Character {
     }
 
     setupFoodThrowing() {
+        // Add hand model to the scene
+        this.setupHand();
+        
+        // Add animation properties
         this.isThrowAnimating = false;
         this.throwAnimationStartTime = 0;
-        this.throwAnimationDuration = 300;
-        this.previewGrowStartTime = 0;
-        this.growDuration = 500;
+        this.throwAnimationDuration = 500;
         
         // Add consume animation properties
         this.isConsumeAnimating = false;
@@ -215,7 +218,8 @@ export class Character {
         this.currentFoodIndex = null;  // Start with no food selected
         this.currentItem = null;   // Start with no food item
         this.previewModel = null;
-        this.loader = new GLTFLoader();
+        // Remove the local loader instance since we're using AssetManager now
+        // this.loader = new GLTFLoader();
     }
 
     setupEventListeners() {
@@ -667,7 +671,8 @@ export class Character {
         // Only show preview if we have a valid food item
         if (this.currentItem) {
             const itemConfig = this.itemRegistry.getType(this.currentItem);
-            this.loader.load(itemConfig.modelPath, (gltf) => {
+            // Use AssetManager instead of this.loader
+            assetManager.loadModel(itemConfig.modelPath, (gltf) => {
                 this.previewModel = gltf.scene;
                 const baseScale = itemConfig.scale * 1.5;
                 this.previewModel.scale.set(0.001, 0.001, 0.001);
