@@ -36,3 +36,12 @@ export const spawner = {
         rare: 0xffff00, //yellow
     }
 }; 
+
+// Death messages that appear when killing another player
+export const deathMessages = [
+    "hed ded",
+    "bro is cooked",
+    "rip bro",
+    "sayonara",
+    "super rip",
+]; 
