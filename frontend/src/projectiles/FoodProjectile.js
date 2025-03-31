@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { HitMarker } from './HitMarker.js';
 import assetManager from '../utils/AssetManager.js';
+import { ItemRegistry } from '../registries/ItemRegistry.js';
+import { assetPath } from '../utils/pathHelper.js';
 
 export class FoodProjectile {
     static activeProjectiles = [];
@@ -29,7 +31,7 @@ export class FoodProjectile {
         }
     }
 
-    constructor({ scene, position, direction, path, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000, onCollision = null, itemType = 'tomato', damage = 10, isOwnProjectile = false, isNetworked = false }) {
+    constructor({ scene, position, direction, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000, onCollision = null, itemType = 'tomato', damage = 10, isOwnProjectile = false, isNetworked = false }) {
         this.scene = scene;
         this.position = position.clone();
         this.direction = direction.normalize();
@@ -53,40 +55,24 @@ export class FoodProjectile {
         // Set initial velocity with arc
         this.velocity.y += arcHeight;
         
-        // Skip model loading - use simple sphere directly
-        this.createFallbackModel();
+        // Load the actual food model
+        this.loadModel();
         
         // Register with projectile system
         FoodProjectile.registerProjectile(this);
     }
 
-    createFallbackModel() {
-        // Create a simple sphere projectile that is more reliable
-        const geometry = new THREE.SphereGeometry(this.collisionRadius, 16, 16);
-        
-        // Color based on item type - simple and effective
-        const colors = {
-            'tomato': 0xff3333,
-            'apple': 0xff0000,
-            'banana': 0xffff00,
-            'watermelon': 0x33aa33,
-            'pineapple': 0xffaa00,
-            'cake': 0xeeaa88,
-            'soda-bottle': 0x3333ff,
-            'loaf-baguette': 0xddbb66
-        };
-        
-        const color = colors[this.itemType] || (this.isOwnProjectile ? 0x00ff00 : 0xff5555);
-        
-        const material = new THREE.MeshBasicMaterial({
-            color: color,
-            wireframe: false
+    loadModel() {
+        const model = ItemRegistry.getType(this.itemType);
+        assetManager.loadModel(assetPath(`objects/${model.model}`), (gltf) => {
+            if (!this.active) return; // Skip if already destroyed
+            
+                this.model = gltf.scene.clone();
+                this.model.scale.set(this.scale, this.scale, this.scale);
+                this.model.position.copy(this.position);
+                this.scene.add(this.model);
+                this.modelLoaded = true;
         });
-        
-        this.model = new THREE.Mesh(geometry, material);
-        this.model.position.copy(this.position);
-        this.scene.add(this.model);
-        this.modelLoaded = true;
     }
 
     createParticleEffect(position) {

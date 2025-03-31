@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import assetManager from '../utils/AssetManager.js';
+import { ItemRegistry } from '../registries/ItemRegistry.js';
+import { assetPath } from '../utils/pathHelper.js';
 
 /**
  * NetworkedProjectile represents a projectile thrown by a remote player.
- * Uses simple spheres for visuals for reliability.
+ * Uses item models for visuals.
  */
 export class NetworkedProjectile {
     static activeProjectiles = [];
@@ -84,42 +87,56 @@ export class NetworkedProjectile {
         // Add arc to trajectory
         this.velocity.y += data.arcHeight || 0.2;
         
-        // Create simple sphere for reliable visualization
+        // Create item model for reliable visualization
         this.createProjectileModel();
     }
     
     /**
-     * Create a simple sphere model for the projectile
+     * Create an item model for the projectile
      */
     createProjectileModel() {
-        // Simple colored sphere based on item type
-        const geometry = new THREE.SphereGeometry(0.15 * this.scale, 16, 16);
+        // Load item model based on item type
+        const model = ItemRegistry.getType(this.itemType);
+        this.modelLoaded = false;
         
-        // Color based on item type
-        const colors = {
-            'tomato': 0xff3333,
-            'apple': 0xff0000,
-            'banana': 0xffff00,
-            'watermelon': 0x33aa33,
-            'pineapple': 0xffaa00,
-            'cake': 0xeeaa88,
-            'soda-bottle': 0x3333ff,
-            'loaf-baguette': 0xddbb66
-        };
-        
-        const color = colors[this.itemType] || 0xff5555;
-        
+        // Initially create a simple placeholder sphere while the model loads
+        const geometry = new THREE.SphereGeometry(0.15 * this.scale, 8, 8);
         const material = new THREE.MeshBasicMaterial({
-            color: color,
-            wireframe: false
+            color: 0xaaaaaa,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.5
         });
         
         this.model = new THREE.Mesh(geometry, material);
         this.model.position.copy(this.position);
         this.scene.add(this.model);
         
-        // Create collision sphere for hit detection
+        // Set default collision radius
         this.collisionRadius = 0.25 * this.scale;
+        
+        // Load the actual item model
+        if (model && model.model) {
+            assetManager.loadModel(assetPath(`objects/${model.model}`), (gltf) => {
+                if (!this.active) return; // Skip if already destroyed
+                
+                // Remove placeholder
+                if (this.model) {
+                    this.scene.remove(this.model);
+                    if (this.model.geometry) this.model.geometry.dispose();
+                    if (this.model.material) this.model.material.dispose();
+                }
+                
+                // Add the loaded model
+                this.model = gltf.scene.clone();
+                this.model.scale.set(this.scale, this.scale, this.scale);
+                this.model.position.copy(this.position);
+                this.scene.add(this.model);
+                this.modelLoaded = true;
+            });
+        } else {
+            console.warn(`Model not found for item type: ${this.itemType}`);
+        }
     }
     
     /**
@@ -229,8 +246,15 @@ export class NetworkedProjectile {
         this.model.position.copy(this.position);
         
         // Add a rotation to make it feel more dynamic
-        this.model.rotation.x += 0.1;
-        this.model.rotation.z += 0.1;
+        if (this.modelLoaded) {
+            // Rotate loaded model
+            this.model.rotation.x += 0.1;
+            this.model.rotation.z += 0.1;
+        } else {
+            // Rotate placeholder more dramatically
+            this.model.rotation.x += 0.2;
+            this.model.rotation.z += 0.2;
+        }
         
         // Check for collisions with local player
         if (localPlayer) {
@@ -276,13 +300,19 @@ export class NetworkedProjectile {
         if (this.model) {
             this.scene.remove(this.model);
             
-            if (this.model.geometry) {
-                this.model.geometry.dispose();
-            }
-            
-            if (this.model.material) {
-                this.model.material.dispose();
-            }
+            // Dispose of resources
+            this.model.traverse((child) => {
+                if (child.isMesh) {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                }
+            });
             
             this.model = null;
         }

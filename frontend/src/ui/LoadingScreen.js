@@ -11,12 +11,13 @@ export class LoadingScreen {
         this.progress = 0;
         this.isVisible = false;
         this.funnyMessages = [
+            "TIP: Cakes do a looooot of damage!",
             "Creating good vibes...",
             "Shelving the food...",
             "Making sure the vibes are immaculate...",
             "Calibrating vibe levels...",
             "Loading digital snacks...",
-            "Setting up the digital dancefloor...",
+            "TIP: Watermelons hurt!",
             "Tuning the virtual radio vibes on...",
             "Teaching NPCs how to vibe...",
             "Brewing digital vibe coffee..."
