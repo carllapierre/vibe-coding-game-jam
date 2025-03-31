@@ -20,6 +20,10 @@ export const character = {
         hit: {
             duration: 0.2, // Duration in seconds for hit state
             animationSpeed: 2.2 // Speed multiplier for hit animation
+        },
+        death: {
+            respawnTime: 5, // Respawn time in seconds
+            defaultRespawnPosition: { x: 0, y: 2, z: 0 } // Default respawn position
         }
     }
 };
