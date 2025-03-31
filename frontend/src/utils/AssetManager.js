@@ -40,17 +40,12 @@ class AssetManager {
       // Set up full path if needed
       const fullPath = path;
       
-      // Add timestamp parameter to avoid caching issues
-      const cacheBustPath = fullPath.includes('?') 
-        ? `${fullPath}&t=${Date.now()}` 
-        : `${fullPath}?t=${Date.now()}`;
-      
       // Log attempt
       console.log(`Loading model from: ${path}`);
       
       // Load the model
       this.gltfLoader.load(
-        cacheBustPath,
+        fullPath,
         (gltf) => {
           // Cache the loaded model for future use
           if (this.modelCache) {
