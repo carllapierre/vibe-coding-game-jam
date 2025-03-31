@@ -3,6 +3,7 @@ import { ColyseusManager } from './ColyseusManager.js';
 import { NetworkedPlayerManager } from '../character/NetworkedPlayer.js';
 import { NetworkedProjectile } from '../projectiles/NetworkedProjectile.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
+import { AudioManager } from '../audio/AudioManager.js';
 
 /**
  * NetworkManager integrates multiplayer functionality into the game.
@@ -305,17 +306,32 @@ export class NetworkManager {
     try {
       console.log(`RECEIVED HIT - Hit by projectile from ${sourcePlayerId} with ${itemType}, damage=${damage}`);
       
-      // As a receiver, we trust the thrower's hit detection
-      // Simply send playerHit to server with source as the thrower
-      this.colyseusManager.send('playerHit', {
-        targetId: this.sessionId,   // We're the target
-        sourceId: sourcePlayerId,   // Player who threw the projectile
-        damage: damage,
-        itemType: itemType          // Include item type for death messages
-      });
+      // Only send network message if connected
+      if (this.isConnected && this.colyseusManager) {
+        // As a receiver, we trust the thrower's hit detection
+        // Simply send playerHit to server with source as the thrower
+        this.colyseusManager.send('playerHit', {
+          targetId: this.sessionId,   // We're the target
+          sourceId: sourcePlayerId,   // Player who threw the projectile
+          damage: damage,
+          itemType: itemType          // Include item type for death messages
+        });
+      } else {
+        console.warn('Not connected to server, cannot send hit information');
+      }
       
       // Show visual feedback immediately
       this.showDamageEffect();
+      
+      // Play hitmarker sound - no proximity needed for local player hit
+      // since we're at the hit position
+      try {
+        if (AudioManager) {
+          AudioManager.play('hit', { volume: 0.8 });
+        }
+      } catch (error) {
+        console.warn('Unable to play hit sound:', error);
+      }
       
       // No damage prediction - wait for server to confirm damage
     } catch (error) {
@@ -661,8 +677,13 @@ export class NetworkManager {
    * @param {Object} data - Hit data with targetPlayerId, damage and itemType
    */
   sendPlayerHit(data) {
-    if (!this.isConnected || !data.targetPlayerId) {
-      console.error('Cannot send player hit: not connected or missing target player ID');
+    if (!this.isConnected) {
+      console.warn('Cannot send player hit: not connected to server');
+      return;
+    }
+    
+    if (!data || !data.targetPlayerId) {
+      console.warn('Cannot send player hit: missing target player ID');
       return;
     }
     
@@ -679,6 +700,15 @@ export class NetworkManager {
       
       // Show hit marker UI immediately
       this.showHitMarker();
+      
+      // Play hit sound for the thrower
+      try {
+        if (AudioManager) {
+          AudioManager.play('hit', { volume: 0.6 });
+        }
+      } catch (error) {
+        console.warn('Unable to play hit sound:', error);
+      }
       
     } catch (error) {
       console.error('Error sending player hit:', error);

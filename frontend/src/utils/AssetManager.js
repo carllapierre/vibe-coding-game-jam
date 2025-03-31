@@ -40,9 +40,6 @@ class AssetManager {
       // Set up full path if needed
       const fullPath = path;
       
-      // Log attempt
-      console.log(`Loading model from: ${path}`);
-      
       // Load the model
       this.gltfLoader.load(
         fullPath,

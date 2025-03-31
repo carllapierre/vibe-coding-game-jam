@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
 import { api, character } from '../config.js';
 import assetManager from '../utils/AssetManager.js';
+import { AudioManager } from '../audio/AudioManager.js';
 
 // Health Manager class for handling character health
 class HealthManager {
@@ -515,6 +516,16 @@ export class Character {
                         itemType: itemConfig.id || 'tomato',
                         hitCount: consecutiveHits  // Send consecutive hit count to server
                     });
+                    
+                    // If we hit the remote player, play hitmarker sound locally for thrower
+                    // The server will notify other players through the network
+                    try {
+                        if (AudioManager) {
+                            AudioManager.play('hit', { volume: 0.6 });
+                        }
+                    } catch (error) {
+                        console.warn('Unable to play hit sound:', error);
+                    }
                 } catch (error) {
                     console.error('Error sending player hit over network:', error);
                 }

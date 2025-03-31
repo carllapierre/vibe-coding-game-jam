@@ -37,16 +37,12 @@ initWebGLTracker();
 // Initialize URL parameters to get username
 initializeFromUrlParams();
 
-// Add keyboard listener for music controls
+// Add keyboard listener for audio controls
 document.addEventListener('keydown', (event) => {
-    // Toggle music mute with 'M' key
-    if (event.key.toLowerCase() === 'm') {
-        const newMutedState = !RadioPlayer.isMuted();
-        RadioPlayer.setMuted(newMutedState);
-        
-        // Show visual feedback when muting/unmuting
+    // Helper function to show mute/unmute notification
+    const showMuteNotification = (type, isMuted) => {
         const muteStatus = document.createElement('div');
-        muteStatus.textContent = `Music ${newMutedState ? 'Muted' : 'Unmuted'}`;
+        muteStatus.textContent = `${type} ${isMuted ? 'Muted' : 'Unmuted'}`;
         muteStatus.style.position = 'fixed';
         muteStatus.style.top = '50%';
         muteStatus.style.left = '50%';
@@ -65,7 +61,20 @@ document.addEventListener('keydown', (event) => {
         setTimeout(() => {
             document.body.removeChild(muteStatus);
         }, 1500);
-        
+    };
+
+    // Toggle music mute with 'M' key
+    if (event.key.toLowerCase() === 'm') {
+        const newMutedState = !RadioPlayer.isMuted();
+        RadioPlayer.setMuted(newMutedState);
+        showMuteNotification('Music', newMutedState);
+    }
+    
+    // Toggle SFX mute with 'N' key
+    if (event.key.toLowerCase() === 'n') {
+        const newMutedState = !AudioManager.isMuted();
+        AudioManager.setMuted(newMutedState);
+        showMuteNotification('Sound Effects', newMutedState);
     }
 });
 
@@ -335,7 +344,7 @@ async function initializeWorld() {
         // Initialize the radio player
         RadioPlayer.initialize();
         // Set initial volumes
-        RadioPlayer.setVolume(0.005); // Start at low volume for background music
+        RadioPlayer.setVolume(0.01); // Start at low volume for background music
         AudioManager.setSfxVolume(0.07); // Start at 70% volume for sound effects
         
         loadingScreen.updateProgress(95);

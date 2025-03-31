@@ -8,6 +8,7 @@ import { HealthBar } from './HealthBar.js';
 import { AnimationManager } from './AnimationManager.js';
 import { deathMessages } from '../config.js';
 import { HitMarker } from '../projectiles/HitMarker.js';
+import { AudioManager } from '../audio/AudioManager.js';
 
 /**
  * NetworkedPlayerManager is responsible for managing all networked players.
@@ -1365,6 +1366,36 @@ export class NetworkedPlayer {
       name: this.playerData.name,
       state: this.playerState
     });
+    
+    // Play hit sound at this player's position
+    if (window.mainCamera && AudioManager) {
+      try {
+        // Get local player position as the listener
+        const listener = window.mainCamera.position;
+        
+        // Use this player's position as the source
+        const source = this.currentPosition;
+        
+        // Calculate distance to determine if sound should be played
+        const dx = source.x - listener.x;
+        const dy = source.y - listener.y;
+        const dz = source.z - listener.z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        
+        // Only play if within audible range (less than maxDistance)
+        const maxDistance = 40;
+        if (distance < maxDistance) {
+          // Play spatial hitmarker sound
+          AudioManager.playSpatial('hit', source, listener, {
+            maxDistance: maxDistance,    // Can be heard from far away
+            minDistance: 5,              // Full volume within 5 units
+            volumeMultiplier: 0.8        // Slightly reduced volume
+          });
+        }
+      } catch (error) {
+        console.warn('Unable to play hit sound:', error);
+      }
+    }
     
     // Handle the death if health reaches zero
     if (estimatedRemainingHealth <= 0 && !this.isDead) {
