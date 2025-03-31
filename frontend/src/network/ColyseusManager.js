@@ -234,6 +234,18 @@ export class ColyseusManager extends EventEmitter {
       console.log(`Received player respawn event: ${data.playerId}`);
       this.emit('playerRespawned', data);
     });
+    
+    // Listen for player damaged events
+    this.room.onMessage('playerDamaged', (data) => {
+      console.log(`Received playerDamaged event: target=${data.targetId}, source=${data.sourceId}, damage=${data.damage}`);
+      this.emit('playerDamaged', data);
+    });
+    
+    // Listen for player hit events (direct hit reports)
+    this.room.onMessage('playerHit', (data) => {
+      console.log(`Received playerHit event: target=${data.targetId}, source=${data.sourceId}, damage=${data.damage}`);
+      this.emit('playerHit', data);
+    });
   }
   
   /**

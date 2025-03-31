@@ -276,13 +276,15 @@ export class NetworkManager {
       // Skip projectiles from our own player
       if (data.playerId === this.sessionId) return;
       
+      console.log(`Received projectile from player ${data.playerId}, type: ${data.itemType || 'unknown'}`);
+      
       // Create a networked projectile
       const projectile = new NetworkedProjectile({
         scene: this.scene,
         data: data,
-        onHitPlayer: (sourcePlayerId, itemType) => {
-          // Handle player hit
-          this.handleProjectileHit(sourcePlayerId, itemType);
+        onHitPlayer: (sourcePlayerId, itemType, damage) => {
+          // When hit by a networked projectile, report damage to server
+          this.handleProjectileHit(sourcePlayerId, itemType, damage);
         }
       });
       
@@ -297,45 +299,28 @@ export class NetworkManager {
    * Handle a projectile hit on local player
    * @param {string} sourcePlayerId - ID of player who threw the projectile
    * @param {string} itemType - Type of item that hit
+   * @param {number} damage - Amount of damage
    */
-  handleProjectileHit(sourcePlayerId, itemType) {
+  handleProjectileHit(sourcePlayerId, itemType, damage) {
     try {
-      // Calculate damage based on item type
-      const damageAmount = this.getDamageForItemType(itemType);
+      console.log(`RECEIVED HIT - Hit by projectile from ${sourcePlayerId} with ${itemType}, damage=${damage}`);
       
-      // When hit by a projectile, we don't apply damage locally
-      // The server will handle this and broadcast the damage event
-      // which will then be processed in onPlayerDamaged
+      // As a receiver, we trust the thrower's hit detection
+      // Simply send playerHit to server with source as the thrower
+      this.colyseusManager.send('playerHit', {
+        targetId: this.sessionId,   // We're the target
+        sourceId: sourcePlayerId,   // Player who threw the projectile
+        damage: damage,
+        itemType: itemType          // Include item type for death messages
+      });
       
-      // Just notify server that we were hit by this player's projectile
-      this.colyseusManager.sendDamage(sourcePlayerId, damageAmount);
-      
-      // Visual feedback immediately (don't wait for server response)
+      // Show visual feedback immediately
       this.showDamageEffect();
       
-      console.log(`Hit by projectile from ${sourcePlayerId}, reporting damage of ${damageAmount}`);
+      // No damage prediction - wait for server to confirm damage
     } catch (error) {
       console.error('Error handling projectile hit:', error);
     }
-  }
-  
-  /**
-   * Get damage amount for an item type
-   * @param {string} itemType - The item type
-   * @returns {number} The damage amount
-   */
-  getDamageForItemType(itemType) {
-    // Different food items can do different damage
-    const damageMap = {
-      'tomato': 10,
-      'apple': 15,
-      'banana': 8,
-      'watermelon': 25,
-      'pineapple': 20,
-      'cake': 30
-    };
-    
-    return damageMap[itemType] || 10; // Default damage if item type not found
   }
   
   /**
@@ -406,19 +391,58 @@ export class NetworkManager {
    */
   onPlayerRespawned(data) {
     try {
-      const { playerId } = data;
+      const { playerId, position } = data;
       
-      // If it's our player, reset health and position
+      // If it's our player, we only want to handle server-initiated respawns
+      // and ignore our own local respawn signals
       if (playerId === this.sessionId && this.localPlayer) {
-        if (this.localPlayer.healthManager) {
-          this.localPlayer.healthManager.setHealth(100);
+        // Only handle respawn from server if the server is sending a position
+        // Otherwise, our local respawn timer is the source of truth
+        if (position && this.localPlayer.isInDeathState) {
+          console.log("Server initiated respawn with position:", position);
+          
+          // Let local player handle the respawn timing
+          if (this.localPlayer.respawn) {
+            // Use setTimeout to ensure we don't interrupt any ongoing death animations
+            setTimeout(() => {
+              this.localPlayer.respawn();
+            }, 100);
+          }
+        } else {
+          console.log("Ignoring respawn signal - using local respawn timing");
         }
-        
-        // Player position will be updated by the server
-        console.log('You have respawned!');
-        
-        // You can add visual effects here
-        // For example, a screen fade-in effect
+      } 
+      // If it's another player, update their health bar to 100%
+      else {
+        const player = this.playerManager.players.get(playerId);
+        if (player) {
+          console.log(`Remote player ${playerId} respawned`);
+          
+          // Update player state to respawned with full health
+          player.updateState({
+            health: 100,
+            // Include other state data to avoid overwriting it
+            x: player.currentPosition.x,
+            y: player.currentPosition.y, 
+            z: player.currentPosition.z,
+            rotationY: player.currentRotationY,
+            name: player.playerData.name,
+            state: 'idle' // Reset state to idle after respawn
+          });
+          
+          // Force update the health bar
+          player.playerData.health = 100;
+          player.health = 100;
+          player.updateHealthBar(false);
+          
+          // Make sure model is visible again
+          if (player.model && !player.model.visible) {
+            player.model.visible = true;
+          }
+          
+          // Remove any death message
+          player.removeDeathMessage();
+        }
       }
     } catch (error) {
       console.error('Error handling player respawn:', error);
@@ -426,103 +450,109 @@ export class NetworkManager {
   }
   
   /**
-   * Handle a player damaged event
-   * @param {Object} data - Damage data including remaining health
+   * Handle a player damaged event - the authoritative update from server
+   * @param {Object} data - Damage data from server
    */
   onPlayerDamaged(data) {
     try {
-      const { hitId, targetId, sourceId, amount, remainingHealth, itemType, timestamp, direct } = data;
+      const { targetId, sourceId, damage, remainingHealth, itemType } = data;
       
-      // Track received hit IDs to prevent duplicate processing
-      if (!this._processedHits) this._processedHits = new Set();
-      
-      // Skip if we've already processed this hit
-      if (hitId && this._processedHits.has(hitId)) {
-        return;
-      }
-      
-      // Mark this hit as processed
-      if (hitId) {
-        this._processedHits.add(hitId);
-        
-        // Cleanup old hit IDs periodically (keep last 100)
-        if (this._processedHits.size > 100) {
-          const oldest = Array.from(this._processedHits)[0];
-          this._processedHits.delete(oldest);
-        }
-      }
+      console.log(`SERVER DAMAGE EVENT: target=${targetId}, source=${sourceId}, damage=${damage}, health=${remainingHealth}, item=${itemType || 'unknown'}`);
       
       // If we're the target, update our health
       if (targetId === this.sessionId) {
         if (this.localPlayer && this.localPlayer.healthManager) {
-          // Always use the server's value for our own health
-          this.localPlayer.healthManager.setHealth(remainingHealth);
-          
-          // Trigger hit state when we take damage
-          if (this.localPlayer.setHitState) {
-            this.localPlayer.setHitState();
+          // If player is already in death state, don't update health
+          if (this.localPlayer.isInDeathState) {
+            console.log("Player already in death state, ignoring health update");
+          } else {
+            // Apply the server's authority on health value
+            this.localPlayer.healthManager.setHealth(remainingHealth);
+            
+            // Visual effects for taking damage
+            this.showDamageEffect();
+            
+            // If health is zero, trigger death state with appropriate death message
+            if (remainingHealth <= 0 && this.localPlayer.setDeathState) {
+              // Get the item type that killed the player for a customized message
+              const killerWeapon = itemType || 'tomato';
+              const killerName = this.getPlayerNameById(sourceId) || 'Someone';
+              
+              // Trigger death state with the killer's name and weapon
+              this.localPlayer.setDeathState(killerName, killerWeapon);
+            }
           }
         }
         
-        console.log(`You were hit for ${amount} damage! Health: ${remainingHealth}`);
-        
-        // Add hit effect
-        this.showDamageEffect();
-      } else {
-        // If it's another player, update their health in the player manager
+        console.log(`You were hit for ${damage} damage! Health: ${remainingHealth}`);
+      } 
+      // If it's another player, update their health in the player manager
+      else {
         const targetPlayer = this.playerManager.players.get(targetId);
         if (targetPlayer) {
-          // Get the current time for time-based reconciliation decisions
-          const now = Date.now();
+          console.log(`Updating player ${targetId} health to ${remainingHealth}`);
           
-          // For direct hits where we're the thrower, prefer our prediction if it's close
-          const wasDirectHit = direct === true && sourceId === this.sessionId;
-          
-          if (wasDirectHit) {
-            // For direct hits where we already have a prediction, keep our prediction
-            if (targetPlayer.health <= remainingHealth || 
-                Math.abs(targetPlayer.health - remainingHealth) < 2) {
-              console.log(`Keeping predicted health for ${targetId}: ${targetPlayer.health} (server: ${remainingHealth})`);
-              return;
+          // Don't update health for players in death state (isDead)
+          if (targetPlayer.isDead && remainingHealth > 0) {
+            console.log(`Player ${targetId} is in death state, ignoring health update`);
+          } else {
+            // Update with server values
+            targetPlayer.updateState({
+              health: remainingHealth,
+              // Include other state data to avoid overwriting it
+              x: targetPlayer.currentPosition.x,
+              y: targetPlayer.currentPosition.y, 
+              z: targetPlayer.currentPosition.z,
+              rotationY: targetPlayer.currentRotationY,
+              name: targetPlayer.playerData.name,
+              state: remainingHealth <= 0 ? 'death' : 'hit' // Set state based on health
+            });
+            
+            // Show hit effect
+            if (targetPlayer.healthBar) {
+              targetPlayer.healthBar.showHitEffect();
             }
-          }
-          
-          // Clear the hit prediction data now that we're updating with server data
-          targetPlayer.lastHitTime = now;
-          targetPlayer.lastHitDamage = amount;
-          
-          console.log(`Updating player ${targetId} health: ${targetPlayer.health} -> ${remainingHealth}`);
-          
-          // Update with server values - use health bar effect for significant changes
-          const showHitEffect = targetPlayer.health - remainingHealth > 5;
-          
-          // Force update with server values
-          targetPlayer.updateState({
-            health: remainingHealth,
-            // Include other state data to avoid overwriting it
-            x: targetPlayer.currentPosition.x,
-            y: targetPlayer.currentPosition.y, 
-            z: targetPlayer.currentPosition.z,
-            rotationY: targetPlayer.currentRotationY,
-            name: targetPlayer.playerData.name,
-            state: 'hit' // Set state to hit when taking damage
-          });
-          
-          // If this is a significant health change, force a hit effect
-          if (showHitEffect && targetPlayer.healthBar) {
-            targetPlayer.healthBar.showHitEffect();
           }
         }
       }
       
-      // If we're the source, we can show a hit marker or similar
+      // If we're the source, show hit confirmation
       if (sourceId === this.sessionId) {
-        console.log(`Server confirmed hit on player ${targetId} for ${amount} damage!`);
-        // Add hit marker
+        console.log(`Server confirmed your hit on player ${targetId} for ${damage} damage!`);
         this.showHitMarker();
       }
     } catch (error) {
       console.error('Error handling player damaged:', error);
+    }
+  }
+  
+  /**
+   * Get a player's name by their session ID
+   * @param {string} playerId - The player's session ID
+   * @returns {string} The player's name or "Unknown Player" if not found
+   */
+  getPlayerNameById(playerId) {
+    try {
+      // Check if it's a remote player
+      if (this.playerManager && this.playerManager.players) {
+        const player = this.playerManager.players.get(playerId);
+        if (player && player.playerData && player.playerData.name) {
+          return player.playerData.name;
+        }
+      }
+      
+      // Check if it's in the Colyseus manager's remote players
+      if (this.colyseusManager && this.colyseusManager.remotePlayers) {
+        const player = this.colyseusManager.remotePlayers[playerId];
+        if (player && player.name) {
+          return player.name;
+        }
+      }
+      
+      return "Unknown Player";
+    } catch (error) {
+      console.error('Error getting player name:', error);
+      return "Unknown Player";
     }
   }
   
@@ -642,12 +672,12 @@ export class NetworkManager {
         targetId: data.targetPlayerId,
         damage: data.damage || 10,
         itemType: data.itemType || 'tomato',
-        sourceId: this.sessionId
+        sourceId: this.sessionId  // We are the source
       });
       
-      console.log('Sent player hit:', data);
+      console.log(`Sent hit report to server - target: ${data.targetPlayerId}, damage: ${data.damage}`);
       
-      // Show hit marker UI
+      // Show hit marker UI immediately
       this.showHitMarker();
       
     } catch (error) {

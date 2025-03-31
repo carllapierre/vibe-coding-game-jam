@@ -23,50 +23,60 @@ class AssetManager {
   }
 
   /**
-   * Load a GLTF model with caching
-   * @param {string} path - Path to the model
+   * Load a model with error handling
+   * @param {string} path - Path to model file
    * @param {Function} onLoad - Callback when model is loaded
-   * @param {Function} onProgress - Callback for load progress
-   * @param {Function} onError - Callback for load errors
+   * @param {Function} onError - Callback when error occurs
    */
-  loadModel(path, onLoad, onProgress, onError) {
-    const fullPath = path.startsWith('/') ? path : assetPath(path);
-    
-    // Check our model cache first
-    if (this.modelCache.has(fullPath)) {
-      const cachedModel = this.modelCache.get(fullPath);
-      // Clone the cached model scene to avoid reference issues
-      const clone = THREE.SkeletonUtils?.clone ? 
-        THREE.SkeletonUtils.clone(cachedModel.scene) : 
-        cachedModel.scene.clone();
-      
-      // Wrap in a GLTF-like object to maintain consistency
-      const clonedResult = { scene: clone, animations: cachedModel.animations };
-      
-      // Call the onLoad callback with cached data
-      if (onLoad) {
-        setTimeout(() => onLoad(clonedResult), 0);
+  loadModel(path, onLoad, onError) {
+    try {
+      // Validate path
+      if (!path) {
+        console.error('Invalid model path');
+        if (onError) onError(new Error('Invalid model path'));
+        return;
       }
-      return;
-    }
-    
-    // Not in cache, load it
-    this.gltfLoader.load(
-      fullPath,
-      (gltf) => {
-        // Cache the result
-        this.modelCache.set(fullPath, {
-          scene: gltf.scene.clone(),
-          animations: gltf.animations
-        });
-        
-        if (onLoad) {
-          onLoad(gltf);
+      
+      // Set up full path if needed
+      const fullPath = path;
+      
+      // Add timestamp parameter to avoid caching issues
+      const cacheBustPath = fullPath.includes('?') 
+        ? `${fullPath}&t=${Date.now()}` 
+        : `${fullPath}?t=${Date.now()}`;
+      
+      // Log attempt
+      console.log(`Loading model from: ${path}`);
+      
+      // Load the model
+      this.gltfLoader.load(
+        cacheBustPath,
+        (gltf) => {
+          // Cache the loaded model for future use
+          if (this.modelCache) {
+            this.modelCache.set(fullPath, {
+              scene: gltf.scene.clone(),
+              animations: gltf.animations
+            });
+          }
+          
+          // Return loaded model to caller
+          if (onLoad) onLoad(gltf);
+        },
+        // Progress callback
+        (xhr) => {
+          // Optional progress tracking
+        },
+        // Error callback
+        (error) => {
+          console.error(`Error loading model from ${path}:`, error);
+          if (onError) onError(error);
         }
-      },
-      onProgress,
-      onError
-    );
+      );
+    } catch (error) {
+      console.error(`Exception loading model ${path}:`, error);
+      if (onError) onError(error);
+    }
   }
   
   /**

@@ -10,8 +10,9 @@ class HealthManager {
     constructor(maxHealth = 100, character) {
         this.maxHealth = maxHealth;
         this.currentHealth = maxHealth;
-        this.healthChangeCallbacks = [];
-        this.character = character; // Reference to the character
+        this.character = character;
+        this.callbacks = [];
+        this.isResettingHealthFromRespawn = false; // Flag to track respawn-triggered health resets
     }
 
     getHealth() {
@@ -27,6 +28,12 @@ class HealthManager {
     }
 
     addHealth(amount) {
+        // Don't add health during death state
+        if (this.character && this.character.isInDeathState) {
+            console.log("Ignoring health addition during death state");
+            return this.currentHealth;
+        }
+        
         const prevHealth = this.currentHealth;
         this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
         if (prevHealth !== this.currentHealth) {
@@ -38,32 +45,64 @@ class HealthManager {
     removeHealth(amount) {
         const prevHealth = this.currentHealth;
         this.currentHealth = Math.max(0, this.currentHealth - amount);
+        
         if (prevHealth !== this.currentHealth) {
             this.notifyHealthChange();
+            
             // Trigger hit state when taking damage
             if (this.character) {
                 this.character.setHitState();
             }
+            
+            // Check for death condition
+            if (this.currentHealth <= 0 && this.character && !this.character.isInDeathState) {
+                console.log("Health reached zero, triggering death state");
+                this.character.setDeathState();
         }
+        }
+        
         return this.currentHealth;
     }
 
+    /**
+     * Set health to a specific value (used for server-authoritative updates)
+     * @param {number} amount - The new health amount
+     * @returns {number} The current health
+     */
     setHealth(amount) {
+        // Block ALL health updates during death state UNLESS we're explicitly resetting from respawn
+        if (this.character && this.character.isInDeathState && !this.isResettingHealthFromRespawn) {
+            console.log("Blocking health update during death state:", amount);
+            return this.currentHealth;
+        }
+        
         const prevHealth = this.currentHealth;
         this.currentHealth = Math.max(0, Math.min(this.maxHealth, amount));
         if (prevHealth !== this.currentHealth) {
             this.notifyHealthChange();
         }
+        
+        // Reset the respawn flag if it was set
+        this.isResettingHealthFromRespawn = false;
+        
         return this.currentHealth;
+    }
+    
+    /**
+     * Reset health to max during respawn - this bypasses death state checks
+     */
+    resetHealthFromRespawn() {
+        console.log("Resetting health from respawn function");
+        this.isResettingHealthFromRespawn = true;
+        this.setHealth(this.maxHealth);
     }
 
     registerHealthChangeCallback(callback) {
-        this.healthChangeCallbacks.push(callback);
+        this.callbacks.push(callback);
     }
 
     notifyHealthChange() {
-        this.healthChangeCallbacks.forEach(callback => 
-            callback(this.currentHealth, this.maxHealth));
+        this.callbacks.forEach(callback => callback(this.currentHealth, this.maxHealth));
     }
 }
 
@@ -165,6 +204,12 @@ export class Character {
         // Add hit state tracking
         this.isInHitState = false;
         this.hitStateStartTime = 0;
+
+        // Add death state tracking
+        this.isInDeathState = false;
+        this.deathStateStartTime = 0;
+        this.respawnCountdown = 0;
+        this.deathOverlay = null;
     }
 
     setEnabled(enabled) {
@@ -172,8 +217,10 @@ export class Character {
         if (!enabled) {
             // Reset all movement keys when disabled
             Object.keys(this.keys).forEach(key => this.keys[key] = false);
-            // Unlock controls when disabled
+            // Unlock controls when disabled but NOT when in death state
+            if (!this.isInDeathState) {
             this.controls.unlock();
+            }
         }
     }
 
@@ -335,7 +382,10 @@ export class Character {
             gravity: 0.01,
             arcHeight: 0.2,
             lifetime: 5000,
-            onCollision: (collidedObject) => this.handleProjectileCollision(collidedObject, itemConfig)
+            itemType: itemConfig.id || 'tomato',
+            damage: itemConfig.damage || this.calculateDamageForItem(itemConfig),
+            isOwnProjectile: true, // Mark as player's own projectile
+            onCollision: (collidedObject, itemConfig) => this.handleProjectileCollision(collidedObject, itemConfig)
         });
         
         FoodProjectile.registerProjectile(projectile);
@@ -381,17 +431,50 @@ export class Character {
      * @param {Object} itemConfig - The configuration of the thrown item
      */
     handleProjectileCollision(collidedObject, itemConfig) {
-        // Check if the collided object is a networked player
-        if (collidedObject && collidedObject.type === 'player' && !collidedObject.isLocalPlayer) {
+        // Check if this is a hit on our own character
+        if (collidedObject && collidedObject.type === 'player') {
+            if (collidedObject.isLocalPlayer) {
+                // If we're hit by a remote player's projectile, handle self damage
+                // This is for projectiles from other players, not our own
+                if (!itemConfig.isOwnProjectile) {
+                    console.log("Local player hit by remote projectile");
+                    const damage = this.calculateDamageForItem(itemConfig);
+                    
+                    // Use the handleHit callback on the collision object
+                    if (collidedObject.handleHit) {
+                        collidedObject.handleHit(damage);
+                    }
+                }
+                return;
+            }
+            
+            // Handle hit on remote player below (existing code)
             const playerSessionId = collidedObject.sessionId;
             
             // Get direct reference to player object
             const player = collidedObject.player;
-            if (!player) return;
+            if (!player) {
+                console.warn('Cannot send hit: missing player reference');
+                return;
+            }
             
             // Check if we're still in cooldown for this player
             const now = Date.now();
             const cooldownTime = 300; // Shorter cooldown to allow multiple successive hits
+            
+            // Check cooldown - skip if we're hitting too rapidly
+            if (this.hitCooldowns.has(playerSessionId)) {
+                const cooldownEndTime = this.hitCooldowns.get(playerSessionId);
+                if (now < cooldownEndTime) {
+                    return; // Still in cooldown, skip this hit
+                }
+            }
+            
+            // Calculate damage based on item properties - should match server-side calculation
+            const damage = this.calculateDamageForItem(itemConfig);
+            
+            // Set cooldown for this player
+            this.hitCooldowns.set(playerSessionId, now + cooldownTime);
             
             // Track hit count for this player to show more dramatic effects for multiple hits
             if (!this.playerHitCounts) this.playerHitCounts = new Map();
@@ -411,20 +494,6 @@ export class Character {
                 }
             }
             
-            // Check cooldown - skip if we're hitting too rapidly
-            if (this.hitCooldowns.has(playerSessionId)) {
-                const cooldownEndTime = this.hitCooldowns.get(playerSessionId);
-                if (now < cooldownEndTime) {
-                    return; // Still in cooldown, skip this hit
-                }
-            }
-            
-            // Calculate damage based on item properties - should match server-side calculation
-            const damage = this.calculateDamageForItem(itemConfig);
-            
-            // Set cooldown for this player
-            this.hitCooldowns.set(playerSessionId, now + cooldownTime);
-            
             // Update consecutive hit count tracking
             this.playerHitCounts.set(playerSessionId, {
                 count: consecutiveHits,
@@ -434,27 +503,11 @@ export class Character {
             // Create hit effect on the player - more particles for consecutive hits
             this.createHitEffect(collidedObject, consecutiveHits);
             
-            // Immediate visual health update - don't wait for server response
-            // Accumulate damage for consecutive hits for smoother visual effect
-            const estimatedRemainingHealth = Math.max(0, player.health - damage);
+            // Use the new utility method to handle the hit directly on the NetworkedPlayer
+            const hitAccepted = player.handleProjectileHit(damage, itemConfig.id || 'tomato');
             
-            // Store the predicted damage amount for reconciliation
-            player.lastHitTime = now;
-            player.lastHitDamage = damage;
-            
-            // Force an immediate health bar update with the hit effect
-            player.updateState({
-                health: estimatedRemainingHealth,
-                x: player.currentPosition.x,
-                y: player.currentPosition.y,
-                z: player.currentPosition.z,
-                rotationY: player.currentRotationY,
-                name: player.playerData.name,
-                state: player.playerState
-            });
-            
-            // Send hit to network manager
-            if (window.networkManager && window.networkManager.isConnected) {
+            // Only send to server if the hit was accepted by the player object
+            if (hitAccepted && window.networkManager && window.networkManager.isConnected) {
                 try {
                     window.networkManager.sendPlayerHit({
                         targetPlayerId: playerSessionId,
@@ -885,6 +938,14 @@ export class Character {
     }
 
     update() {
+        // Skip most functionality if player is dead, but don't return entirely
+        // We need to keep checking for respawn and showing UI elements
+        if (this.isInDeathState) {
+            // Still update hand position for proper rendering
+            this.updateHandPosition();
+            return;
+        }
+        
         // Update collision sphere position
         this.collisionSphere.position.copy(this.camera.position);
         
@@ -1558,16 +1619,412 @@ export class Character {
     }
 
     /**
-     * Get the bounding box for collision detection
-     * @returns {Object} Object with box and meshes properties
+     * Get the collision box for character and handle self-hit detection
+     * This needs to check for own projectile collisions
      */
     getCollisionBox() {
         return {
             box: new THREE.Box3().setFromObject(this.boxMesh),
             meshes: this.getCollisionMeshes(),
             type: 'player',
-            isLocalPlayer: true
+            isLocalPlayer: true,
+            handleHit: (damage) => this.handleSelfHit(damage)
         };
+    }
+
+    /**
+     * Handle this player being hit by a projectile
+     * @param {number} damage - The amount of damage taken
+     */
+    handleSelfHit(damage) {
+        // Only show visual effects - actual health changes come from server
+        console.log(`Character taking ${damage} damage from hit`);
+        
+        // Create a hit effect
+        this.createHitEffect();
+        
+        // We don't modify health directly - server will send health update
+    }
+
+    /**
+     * Create visual effect when hit by projectile
+     */
+    createHitEffect() {
+        // Flash the screen red
+        const hitOverlay = document.createElement('div');
+        hitOverlay.style.position = 'fixed';
+        hitOverlay.style.top = '0';
+        hitOverlay.style.left = '0';
+        hitOverlay.style.width = '100%';
+        hitOverlay.style.height = '100%';
+        hitOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+        hitOverlay.style.pointerEvents = 'none';
+        hitOverlay.style.zIndex = '1000';
+        hitOverlay.style.opacity = '0.7';
+        
+        // Add to document
+        document.body.appendChild(hitOverlay);
+        
+        // Fade out and remove
+        setTimeout(() => {
+            hitOverlay.style.transition = 'opacity 0.5s ease-out';
+            hitOverlay.style.opacity = '0';
+            
+            // Remove from DOM after fade completes
+            setTimeout(() => {
+                if (hitOverlay.parentNode) {
+                    document.body.removeChild(hitOverlay);
+                }
+            }, 500);
+        }, 50);
+    }
+
+    /**
+     * Set the character to death state
+     * @param {string} killerName - Name of the player who killed this character
+     * @param {string} weaponType - Type of weapon that killed the character
+     */
+    setDeathState(killerName = null, weaponType = null) {
+        console.log("Setting death state for character");
+        // Don't set if already in death state
+        if (this.isInDeathState) {
+            console.log("Already in death state, ignoring duplicate call");
+            return;
+        }
+        
+        this.isInDeathState = true;
+        this.isRespawning = false; // Track respawn state
+        this.deathStateStartTime = Date.now();
+        this.playerState = 'death';
+        this.respawnCountdown = character.states.death.respawnTime;
+        this.killerName = killerName;
+        this.weaponType = weaponType;
+        
+        // Lock controls when dead
+        this.setEnabled(false);
+        
+        // Force camera to freeze in place
+        this.controls.unlock();
+        
+        // Create a flash effect when dying
+        this.createDeathEffect();
+        
+        // Create death overlay
+        this.createDeathOverlay();
+        
+        // Start respawn countdown
+        this.startRespawnCountdown();
+        
+        // Send player state update over network
+        if (window.networkManager && window.networkManager.isConnected) {
+            window.networkManager.sendPlayerState(this.playerState);
+        }
+    }
+    
+    /**
+     * Create a flash and visual effects when the player dies
+     */
+    createDeathEffect() {
+        // Apply a screen shake effect
+        const originalPosition = this.camera.position.clone();
+        const shakeIntensity = 0.1;
+        const shakeDuration = 500; // ms
+        const startTime = Date.now();
+        
+        const shakeEffect = () => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < shakeDuration) {
+                // Apply random offset based on intensity and decreasing over time
+                const factor = 1 - (elapsed / shakeDuration);
+                const offsetX = (Math.random() * 2 - 1) * shakeIntensity * factor;
+                const offsetY = (Math.random() * 2 - 1) * shakeIntensity * factor;
+                
+                // Apply shake to camera view (not position)
+                this.camera.rotation.x += offsetY * 0.01;
+                this.camera.rotation.y += offsetX * 0.01;
+                
+                requestAnimationFrame(shakeEffect);
+            }
+        };
+        
+        // Start shake animation
+        shakeEffect();
+    }
+    
+    /**
+     * Create red tinted death overlay with respawn text
+     */
+    createDeathOverlay() {
+        // Remove any existing overlay first
+        this.removeDeathOverlay();
+        
+        // Create overlay container
+        this.deathOverlay = document.createElement('div');
+        this.deathOverlay.id = 'death-overlay';
+        this.deathOverlay.style.position = 'absolute';
+        this.deathOverlay.style.top = '0';
+        this.deathOverlay.style.left = '0';
+        this.deathOverlay.style.width = '100%';
+        this.deathOverlay.style.height = '100%';
+        this.deathOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+        this.deathOverlay.style.display = 'flex';
+        this.deathOverlay.style.flexDirection = 'column';
+        this.deathOverlay.style.justifyContent = 'center';
+        this.deathOverlay.style.alignItems = 'center';
+        this.deathOverlay.style.zIndex = '1000';
+        this.deathOverlay.style.pointerEvents = 'none'; // Allow clicks to pass through
+        
+        // Add a "YOU DIED" message
+        const deathMessage = document.createElement('div');
+        deathMessage.style.color = 'white';
+        deathMessage.style.fontSize = '64px';
+        deathMessage.style.fontWeight = 'bold';
+        deathMessage.style.textShadow = '0 0 10px black';
+        deathMessage.style.marginBottom = '30px';
+        deathMessage.textContent = 'YOU DIED';
+        deathMessage.style.opacity = '0';
+        deathMessage.style.transform = 'scale(0.5)';
+        deathMessage.style.transition = 'all 0.5s ease-out';
+        
+        // Add custom death message if killer info is available
+        let deathDescriptionText = '';
+        if (this.killerName && this.weaponType) {
+            // Get a random funny message from deathMessages
+            const messages = [
+                `${this.killerName} turned you into a snack with a ${this.weaponType}!`,
+                `${this.killerName} put the food in food fight with their ${this.weaponType}!`,
+                `That ${this.weaponType} from ${this.killerName} was served extra spicy!`,
+                `${this.killerName} just food-KO'd you with a ${this.weaponType}!`,
+                `${this.killerName}'s ${this.weaponType} had your name on it!`
+            ];
+            deathDescriptionText = messages[Math.floor(Math.random() * messages.length)];
+        }
+        
+        // Create killer description if available
+        if (deathDescriptionText) {
+            const killerDescription = document.createElement('div');
+            killerDescription.style.color = '#ffcc00';
+            killerDescription.style.fontSize = '24px';
+            killerDescription.style.fontWeight = 'bold';
+            killerDescription.style.textShadow = '0 0 5px black';
+            killerDescription.style.marginBottom = '20px';
+            killerDescription.style.textAlign = 'center';
+            killerDescription.style.maxWidth = '80%';
+            killerDescription.textContent = deathDescriptionText;
+            killerDescription.style.opacity = '0';
+            killerDescription.style.transition = 'opacity 0.5s ease-out';
+            
+            // Add to overlay after death message
+            this.deathOverlay.appendChild(deathMessage);
+            this.deathOverlay.appendChild(killerDescription);
+            
+            // Fade in with delay
+            setTimeout(() => {
+                killerDescription.style.opacity = '1';
+            }, 700);
+        } else {
+            // Just add the death message
+            this.deathOverlay.appendChild(deathMessage);
+        }
+        
+        // Create countdown text element
+        this.respawnText = document.createElement('div');
+        this.respawnText.style.color = 'white';
+        this.respawnText.style.fontSize = '32px';
+        this.respawnText.style.fontWeight = 'bold';
+        this.respawnText.style.textShadow = '0 0 10px black';
+        this.respawnText.textContent = `Respawning in ${this.respawnCountdown} seconds`;
+        this.respawnText.style.opacity = '0';
+        this.respawnText.style.transition = 'opacity 0.5s ease-out';
+        
+        // Add respawn text to overlay
+        this.deathOverlay.appendChild(this.respawnText);
+        
+        // Add overlay to DOM
+        document.body.appendChild(this.deathOverlay);
+        
+        // Trigger animations after a short delay
+        setTimeout(() => {
+            // Fade in the death message with animation
+            deathMessage.style.opacity = '1';
+            deathMessage.style.transform = 'scale(1)';
+            
+            // Fade in the respawn text
+            setTimeout(() => {
+                this.respawnText.style.opacity = '1';
+            }, 500);
+        }, 100);
+        
+        // Add vignette effect (darkened corners)
+        const vignette = document.createElement('div');
+        vignette.style.position = 'absolute';
+        vignette.style.top = '0';
+        vignette.style.left = '0';
+        vignette.style.width = '100%';
+        vignette.style.height = '100%';
+        vignette.style.boxShadow = 'inset 0 0 150px 60px rgba(0, 0, 0, 0.8)';
+        vignette.style.pointerEvents = 'none';
+        vignette.style.zIndex = '999';
+        document.body.appendChild(vignette);
+        
+        // Store vignette reference for cleanup
+        this.vignetteEffect = vignette;
+    }
+    
+    /**
+     * Remove death overlay from DOM
+     */
+    removeDeathOverlay() {
+        if (this.deathOverlay && this.deathOverlay.parentNode) {
+            this.deathOverlay.parentNode.removeChild(this.deathOverlay);
+            this.deathOverlay = null;
+        }
+        
+        if (this.vignetteEffect && this.vignetteEffect.parentNode) {
+            this.vignetteEffect.parentNode.removeChild(this.vignetteEffect);
+            this.vignetteEffect = null;
+        }
+    }
+    
+    /**
+     * Start the countdown to respawn
+     */
+    startRespawnCountdown() {
+        if (!this.respawnCountdown) {
+            console.error("No respawn countdown set");
+            return;
+        }
+        
+        console.log(`Starting respawn countdown: ${this.respawnCountdown} seconds`);
+        
+        // Clear any existing countdown
+        if (this.respawnCountdownInterval) {
+            clearInterval(this.respawnCountdownInterval);
+        }
+        
+        // Initialize last update time
+        let lastUpdate = Date.now();
+        
+        const updateCountdown = () => {
+            const now = Date.now();
+            const deltaTime = (now - lastUpdate) / 1000; // Convert to seconds
+            lastUpdate = now;
+            
+            // Decrease countdown
+            this.respawnCountdown -= deltaTime;
+            
+            // Update UI
+            if (this.respawnText) {
+                this.respawnText.textContent = `Respawning in ${Math.ceil(this.respawnCountdown)} seconds`;
+            }
+            
+            // Check if countdown is complete
+            if (this.respawnCountdown <= 0) {
+                // Clear interval
+                clearInterval(this.respawnCountdownInterval);
+                
+                console.log("Respawn countdown complete, respawning now...");
+                
+                // Actually respawn the player
+                this.respawn();
+            }
+        };
+        
+        // Start a precise countdown that accounts for frame rate variations
+        this.respawnCountdownInterval = setInterval(updateCountdown, 100);
+    }
+    
+    /**
+     * Respawn the player after death
+     */
+    respawn() {
+        console.log("Respawning player");
+        
+        // Prevent premature respawn
+        if (this.isRespawning) {
+            console.log("Already respawning, ignoring duplicate call");
+            return;
+        }
+        
+        // Mark as respawning to prevent duplicate respawns
+        this.isRespawning = true;
+        
+        // Remove death overlay with fade out effect
+        if (this.deathOverlay) {
+            this.deathOverlay.style.opacity = '0';
+            this.deathOverlay.style.transition = 'opacity 0.5s ease-in';
+            
+            if (this.vignetteEffect) {
+                this.vignetteEffect.style.opacity = '0';
+                this.vignetteEffect.style.transition = 'opacity 0.5s ease-in';
+            }
+            
+            // Wait for fade out before removing
+            setTimeout(() => {
+                this.removeDeathOverlay();
+            }, 500);
+        } else {
+            this.removeDeathOverlay();
+        }
+        
+        // Reset health
+        this.healthManager.resetHealthFromRespawn();
+        
+        // Reset player state
+        this.isInDeathState = false;
+        this.playerState = 'idle';
+        
+        // Teleport to respawn position
+        const respawnPos = character.states.death.defaultRespawnPosition;
+        this.camera.position.set(respawnPos.x, respawnPos.y, respawnPos.z);
+        
+        // Reset velocity
+        this.velocity.set(0, 0, 0);
+        
+        // Re-enable controls
+        this.setEnabled(true);
+        this.controls.lock();
+        
+        // Create respawn effect
+        this.createRespawnEffect();
+        
+        // Send updated player state over network
+        if (window.networkManager && window.networkManager.isConnected) {
+            window.networkManager.sendPlayerState(this.playerState);
+        }
+        
+        // Allow new deaths to happen
+        setTimeout(() => {
+            this.isRespawning = false;
+        }, 1000); // Small buffer time to prevent immediate re-deaths
+    }
+    
+    /**
+     * Create a visual effect when respawning
+     */
+    createRespawnEffect() {
+        // Flash the screen white
+        const flashOverlay = document.createElement('div');
+        flashOverlay.style.position = 'absolute';
+        flashOverlay.style.top = '0';
+        flashOverlay.style.left = '0';
+        flashOverlay.style.width = '100%';
+        flashOverlay.style.height = '100%';
+        flashOverlay.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        flashOverlay.style.zIndex = '999';
+        flashOverlay.style.pointerEvents = 'none';
+        flashOverlay.style.transition = 'opacity 1s ease-out';
+        document.body.appendChild(flashOverlay);
+        
+        // Fade out
+        setTimeout(() => {
+            flashOverlay.style.opacity = '0';
+            setTimeout(() => {
+                if (flashOverlay.parentNode) {
+                    flashOverlay.parentNode.removeChild(flashOverlay);
+                }
+            }, 1000);
+        }, 50);
     }
 
     /**
@@ -1585,5 +2042,4 @@ export class Character {
             }
         }
     }
-
 } 

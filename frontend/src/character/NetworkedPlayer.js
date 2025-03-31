@@ -6,6 +6,8 @@ import { CharacterRegistry } from '../registries/CharacterRegistry.js';
 import { NameTag } from './NameTag.js';
 import { HealthBar } from './HealthBar.js';
 import { AnimationManager } from './AnimationManager.js';
+import { deathMessages } from '../config.js';
+import { HitMarker } from '../projectiles/HitMarker.js';
 
 /**
  * NetworkedPlayerManager is responsible for managing all networked players.
@@ -238,6 +240,12 @@ export class NetworkedPlayer {
     // Bounding box
     this.boundingBox = null;
     this.boundingBoxSize = new THREE.Vector3(1.5, 3, 1.5); // Default size, will adjust based on model
+    
+    // Add death state tracking
+    this.isDead = false;
+    this.deathStartTime = null;
+    this.respawnTime = null;
+    this.deathMessageObject = null;
     
     this.createModel();
   }
@@ -477,6 +485,22 @@ export class NetworkedPlayer {
         this.updateAnimationState(this.playerState);
       }
       
+      // Handle death state
+      if (state.state === 'death' && !this.isDead) {
+        this.triggerDeath();
+      } else if (state.state !== 'death' && this.isDead) {
+        // Player has respawned
+        this.isDead = false;
+        
+        // If model was hidden, show it again
+        if (this.model) {
+          this.model.visible = true;
+        }
+        
+        // Remove any death message
+        this.removeDeathMessage();
+      }
+      
       // Update health if provided
       if (state.health !== undefined && state.health !== this.health) {
         const prevHealth = this.health;
@@ -484,6 +508,11 @@ export class NetworkedPlayer {
         // Show hit effect if health decreased
         const showHitEffect = state.health < prevHealth;
         this.updateHealthBar(showHitEffect);
+        
+        // Check for death transition (health reached 0)
+        if (state.health <= 0 && prevHealth > 0) {
+          this.triggerDeath();
+        }
       }
       
       // Add to position buffer for smoothing
@@ -786,5 +815,647 @@ export class NetworkedPlayer {
       sessionId: this.sessionId,
       position: this.model ? this.model.position : this.currentPosition
     };
+  }
+  
+  /**
+   * Trigger death effects and state
+   */
+  triggerDeath() {
+    // Set death state
+    this.isDead = true;
+    this.deathStartTime = Date.now();
+    
+    // Hide the model
+    if (this.model) {
+      // Create death explosion effect before hiding model
+      this.createDeathExplosion();
+      
+      // Show random death message
+      this.showDeathMessage();
+      
+      // Create a big hit marker at the player's position
+      this.createDeathHitMarker();
+      
+      // Hide model - use a short delay to allow explosion effect to start
+      setTimeout(() => {
+        if (this.model) {
+          this.model.visible = false;
+        }
+      }, 100);
+    }
+  }
+  
+  /**
+   * Create explosion of particles and confetti when player dies
+   */
+  createDeathExplosion() {
+    if (!this.model) return;
+    
+    const position = this.model.position.clone();
+    const particleCount = 150; // Increased particles
+    const confettiCount = 100; // Increased confetti
+    
+    // Create colored particles
+    const particleColors = [0xff0000, 0xff8800, 0xffff00, 0xffffff, 0xff00ff];
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = [];
+    const particleVelocities = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+      // Start particles at random positions within the player's body
+      particlePositions.push(
+        position.x + (Math.random() - 0.5) * 1.0,
+        position.y + Math.random() * 2.0, // Distribute across player height
+        position.z + (Math.random() - 0.5) * 1.0
+      );
+      
+      // Explode outward with random velocities
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.1 + Math.random() * 0.3; // Increased speed
+      particleVelocities.push(
+        Math.cos(angle) * speed,
+        0.1 + Math.random() * 0.3, // Upward bias, increased
+        Math.sin(angle) * speed
+      );
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));
+    
+    // Create different colored particle systems for variety
+    const particleSystems = [];
+    
+    particleColors.forEach(color => {
+      const material = new THREE.PointsMaterial({
+        color: color,
+        size: 0.12, // Larger particles
+        transparent: true,
+        opacity: 1
+      });
+      
+      const particles = new THREE.Points(particleGeometry.clone(), material);
+      this.scene.add(particles);
+      particleSystems.push({
+        points: particles,
+        velocities: [...particleVelocities],
+        material: material
+      });
+    });
+    
+    // Create explosion flash
+    const flashGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide
+    });
+    
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    flash.position.y += 1.0; // Center on player body
+    this.scene.add(flash);
+    
+    // Animate flash
+    gsap.to(flash.scale, {
+      x: 2.5,
+      y: 2.5,
+      z: 2.5,
+      duration: 0.3,
+      ease: "power2.out"
+    });
+    
+    gsap.to(flashMaterial, {
+      opacity: 0,
+      duration: 0.5,
+      ease: "power2.out",
+      onComplete: () => {
+        this.scene.remove(flash);
+        flashGeometry.dispose();
+        flashMaterial.dispose();
+      }
+    });
+    
+    // Create confetti (flat rectangles with random colors)
+    const confetti = [];
+    const confettiColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff5500, 0x55ff00];
+    
+    for (let i = 0; i < confettiCount; i++) {
+      const confettiGeometry = new THREE.PlaneGeometry(0.15, 0.15); // Larger confetti
+      const confettiMaterial = new THREE.MeshBasicMaterial({
+        color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 1
+      });
+      
+      const confettiMesh = new THREE.Mesh(confettiGeometry, confettiMaterial);
+      
+      // Position confetti at player position with some randomness
+      confettiMesh.position.set(
+        position.x + (Math.random() - 0.5) * 1.5, // wider spread
+        position.y + Math.random() * 2.5, // higher spread
+        position.z + (Math.random() - 0.5) * 1.5  // wider spread
+      );
+      
+      // Random rotation
+      confettiMesh.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2
+      );
+      
+      // Random velocity - faster and more varied
+      const confettiVelocity = {
+        x: (Math.random() - 0.5) * 0.3,
+        y: 0.1 + Math.random() * 0.2,
+        z: (Math.random() - 0.5) * 0.3,
+        rotX: (Math.random() - 0.5) * 0.15,
+        rotY: (Math.random() - 0.5) * 0.15,
+        rotZ: (Math.random() - 0.5) * 0.15
+      };
+      
+      this.scene.add(confettiMesh);
+      confetti.push({
+        mesh: confettiMesh,
+        velocity: confettiVelocity
+      });
+    }
+    
+    // Add some food items in the explosion
+    const foodGeometries = [
+      new THREE.SphereGeometry(0.2, 16, 16), // apple/tomato
+      new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8), // banana
+      new THREE.BoxGeometry(0.3, 0.2, 0.3) // cake slice
+    ];
+    
+    const foodItems = [];
+    const foodCount = 10;
+    
+    for (let i = 0; i < foodCount; i++) {
+      const geomIndex = Math.floor(Math.random() * foodGeometries.length);
+      const foodGeometry = foodGeometries[geomIndex].clone();
+      
+      // Different colors for food items
+      const foodColor = Math.random() < 0.5 ? 0xff4444 : 0xffcc00;
+      
+      const foodMaterial = new THREE.MeshBasicMaterial({
+        color: foodColor,
+        transparent: true,
+        opacity: 1
+      });
+      
+      const foodMesh = new THREE.Mesh(foodGeometry, foodMaterial);
+      
+      // Position food at player position
+      foodMesh.position.set(
+        position.x + (Math.random() - 0.5) * 1.0,
+        position.y + 0.5 + Math.random() * 1.5,
+        position.z + (Math.random() - 0.5) * 1.0
+      );
+      
+      // Random rotation
+      foodMesh.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2
+      );
+      
+      // Random velocity
+      const foodVelocity = {
+        x: (Math.random() - 0.5) * 0.3,
+        y: 0.15 + Math.random() * 0.25,
+        z: (Math.random() - 0.5) * 0.3,
+        rotX: (Math.random() - 0.5) * 0.2,
+        rotY: (Math.random() - 0.5) * 0.2,
+        rotZ: (Math.random() - 0.5) * 0.2
+      };
+      
+      this.scene.add(foodMesh);
+      foodItems.push({
+        mesh: foodMesh,
+        velocity: foodVelocity,
+        geometry: foodGeometry,
+        material: foodMaterial
+      });
+    }
+    
+    // Animate particle explosion
+    const startTime = Date.now();
+    const explosionDuration = 3000; // Longer duration
+    
+    const animateExplosion = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = elapsed / explosionDuration;
+      
+      // Apply gravity to all particles
+      const gravity = 0.001;
+      
+      // Update particle positions
+      particleSystems.forEach(system => {
+        const positions = system.points.geometry.attributes.position.array;
+        
+        for (let i = 0; i < particleCount; i++) {
+          // Apply velocity
+          positions[i * 3] += system.velocities[i * 3];
+          positions[i * 3 + 1] += system.velocities[i * 3 + 1];
+          positions[i * 3 + 2] += system.velocities[i * 3 + 2];
+          
+          // Apply gravity to Y velocity
+          system.velocities[i * 3 + 1] -= gravity;
+        }
+        
+        system.points.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out
+        system.material.opacity = 1 - progress;
+      });
+      
+      // Update confetti
+      confetti.forEach(c => {
+        // Apply velocity
+        c.mesh.position.x += c.velocity.x;
+        c.mesh.position.y += c.velocity.y;
+        c.mesh.position.z += c.velocity.z;
+        
+        // Apply rotation
+        c.mesh.rotation.x += c.velocity.rotX;
+        c.mesh.rotation.y += c.velocity.rotY;
+        c.mesh.rotation.z += c.velocity.rotZ;
+        
+        // Apply gravity to Y velocity
+        c.velocity.y -= gravity * 1.5;
+        
+        // Fade out
+        c.mesh.material.opacity = 1 - progress;
+      });
+      
+      // Update food items
+      foodItems.forEach(food => {
+        // Apply velocity
+        food.mesh.position.x += food.velocity.x;
+        food.mesh.position.y += food.velocity.y;
+        food.mesh.position.z += food.velocity.z;
+        
+        // Apply rotation
+        food.mesh.rotation.x += food.velocity.rotX;
+        food.mesh.rotation.y += food.velocity.rotY;
+        food.mesh.rotation.z += food.velocity.rotZ;
+        
+        // Apply gravity to Y velocity
+        food.velocity.y -= gravity * 2.0;
+        
+        // Fade out
+        food.material.opacity = 1 - progress;
+      });
+      
+      if (elapsed < explosionDuration) {
+        requestAnimationFrame(animateExplosion);
+      } else {
+        // Clean up after animation completes
+        particleSystems.forEach(system => {
+          this.scene.remove(system.points);
+          system.points.geometry.dispose();
+          system.material.dispose();
+        });
+        
+        confetti.forEach(c => {
+          this.scene.remove(c.mesh);
+          c.mesh.geometry.dispose();
+          c.mesh.material.dispose();
+        });
+        
+        foodItems.forEach(food => {
+          this.scene.remove(food.mesh);
+          food.geometry.dispose();
+          food.material.dispose();
+        });
+      }
+    };
+    
+    animateExplosion();
+  }
+  
+  /**
+   * Create a custom hit marker effect for player death
+   */
+  createDeathHitMarker() {
+    if (!this.model) return;
+    
+    const position = this.model.position.clone();
+    position.y += 1.5; // Center on player body
+    
+    // Try to access the scene's camera or create a default direction
+    let camera = null;
+    if (this.scene.camera) {
+      camera = this.scene.camera;
+    }
+    
+    // Create custom death hit marker
+    HitMarker.create({
+      scene: this.scene,
+      position: position,
+      type: 'headshot', // Use the most dramatic effect type
+      color: 0xff0000, // Red color for death
+      camera: camera
+    });
+    
+    // Show UI hit marker
+    HitMarker.showUiHitMarker({
+      size: 40, // Larger size
+      color: '#ff0000', // Red
+      duration: 1000, // Longer duration
+      thickness: 3, // Thicker lines
+      isHeadshot: true // Show headshot indicator text
+    });
+  }
+  
+  /**
+   * Show a random death message above the player
+   */
+  showDeathMessage() {
+    // Remove any existing message first
+    this.removeDeathMessage();
+    
+    if (!this.model) return;
+    
+    // Get a random death message
+    const message = deathMessages[Math.floor(Math.random() * deathMessages.length)];
+    
+    // Create a text sprite
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 512;
+    canvas.height = 256;
+    
+    // Style the text - more stylized
+    context.fillStyle = '#000000';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.globalAlpha = 0.7;
+
+    // Add gradient background
+    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#ff3300');
+    gradient.addColorStop(1, '#ffcc00');
+    
+    // Draw rounded rectangle background
+    context.globalAlpha = 0.8;
+    context.fillStyle = gradient;
+    roundRect(context, 10, 10, canvas.width - 20, canvas.height - 20, 20, true);
+    
+    // Make text more comic-like
+    context.globalAlpha = 1.0;
+    context.font = 'bold 70px Impact, Arial Black, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    // Add text shadow for depth
+    context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    context.shadowBlur = 8;
+    context.shadowOffsetX = 4;
+    context.shadowOffsetY = 4;
+    
+    // White text
+    context.fillStyle = '#FFFFFF';
+    context.fillText(message.toUpperCase(), canvas.width/2, canvas.height/2);
+    
+    // Add yellow stroke to text
+    context.lineWidth = 3;
+    context.strokeStyle = '#FFCC00';
+    context.strokeText(message.toUpperCase(), canvas.width/2, canvas.height/2);
+    
+    // Add explosion shapes around text
+    context.fillStyle = '#FFFF00';
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const x = canvas.width/2 + Math.cos(angle) * 180;
+      const y = canvas.height/2 + Math.sin(angle) * 80;
+      const size = 20 + Math.random() * 15;
+      
+      context.beginPath();
+      context.moveTo(x, y - size);
+      context.lineTo(x + size/2, y - size/4);
+      context.lineTo(x + size, y);
+      context.lineTo(x + size/2, y + size/4);
+      context.lineTo(x, y + size);
+      context.lineTo(x - size/2, y + size/4);
+      context.lineTo(x - size, y);
+      context.lineTo(x - size/2, y - size/4);
+      context.closePath();
+      context.fill();
+    }
+    
+    // Create sprite material from canvas
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.1 // Start with low opacity for fade-in
+    });
+    
+    // Create sprite
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(4, 2, 1); // Larger text
+    
+    // Position above player
+    sprite.position.copy(this.model.position);
+    sprite.position.y += 4.0; // Higher above player
+    
+    // Add to scene
+    this.scene.add(sprite);
+    this.deathMessageObject = sprite;
+    
+    // Animate the message with bounce effect
+    const startScale = { x: 0.5, y: 0.5 };
+    const endScale = { x: 4, y: 2 };
+    
+    // Scaling animation
+    gsap.fromTo(
+      sprite.scale, 
+      startScale,
+      {
+        ...endScale,
+        duration: 0.5,
+        ease: "elastic.out(1, 0.3)"
+      }
+    );
+    
+    // Opacity animation
+    gsap.to(material, {
+      opacity: 1,
+      duration: 0.3,
+      ease: "power2.out"
+    });
+    
+    // Float and fade animation
+    const startTime = Date.now();
+    const messageDuration = 4000; // Longer duration
+    
+    const animateMessage = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = elapsed / messageDuration;
+      
+      if (progress < 1 && this.deathMessageObject) {
+        // Add some horizontal wave motion
+        const wave = Math.sin(elapsed * 0.005) * 0.03;
+        this.deathMessageObject.position.x += wave;
+        
+        // Float upward
+        this.deathMessageObject.position.y += 0.01;
+        
+        // Start fading out after 2 seconds
+        if (elapsed > 2000) {
+          this.deathMessageObject.material.opacity = 1 - ((elapsed - 2000) / 2000);
+        }
+        
+        requestAnimationFrame(animateMessage);
+      } else {
+        // Clean up
+        this.removeDeathMessage();
+      }
+    };
+    
+    animateMessage();
+  }
+  
+  /**
+   * Remove death message from scene
+   */
+  removeDeathMessage() {
+    if (this.deathMessageObject) {
+      this.scene.remove(this.deathMessageObject);
+      
+      if (this.deathMessageObject.material) {
+        this.deathMessageObject.material.map?.dispose();
+        this.deathMessageObject.material.dispose();
+      }
+      
+      this.deathMessageObject = null;
+    }
+  }
+  
+  /**
+   * Handle projectile collision with an object - since this needs to be fixed in Character.js, we should add a utility
+   * method in NetworkedPlayer to help handle hits more gracefully.
+   */
+  handleProjectileHit(damage, itemType) {
+    // Make sure we have a valid player ID
+    if (!this.sessionId) {
+      console.warn('Cannot handle hit: missing player session ID');
+      return false;
+    }
+    
+    // Now apply hit effect with animation
+    const now = Date.now();
+    
+    // Immediate visual health update - don't wait for server response
+    // Calculate estimated remaining health
+    const estimatedRemainingHealth = Math.max(0, this.health - damage);
+    
+    // Store the predicted damage amount for reconciliation
+    this.lastHitTime = now;
+    this.lastHitDamage = damage;
+    
+    // Force an immediate health bar update with the hit effect
+    this.updateState({
+      health: estimatedRemainingHealth,
+      x: this.currentPosition.x,
+      y: this.currentPosition.y,
+      z: this.currentPosition.z,
+      rotationY: this.currentRotationY,
+      name: this.playerData.name,
+      state: this.playerState
+    });
+    
+    // Handle the death if health reaches zero
+    if (estimatedRemainingHealth <= 0 && !this.isDead) {
+      this.triggerDeath();
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Create a projectile thrown by this networked player
+   * @param {Object} projectileData - Projectile data from the server
+   * @param {THREE.Scene} scene - The scene to add the projectile to
+   * @param {Function} onCollision - Callback for collision detection
+   * @returns {Object} The created projectile
+   */
+  createProjectile(projectileData, scene, onCollision) {
+    if (!projectileData || !scene) {
+      console.warn('Invalid data for NetworkedPlayer.createProjectile');
+      return null;
+    }
+    
+    try {
+      const { itemType, x, y, z, dirX, dirY, dirZ, speed, scale, gravity, arcHeight, lifetime } = projectileData;
+      
+      // Get model path from item registry
+      const itemRegistry = window.itemRegistry;
+      let modelPath = 'assets/models/food/tomato.glb'; // Default fallback
+      let damage = 10; // Default damage
+      
+      if (itemRegistry && itemType) {
+        const itemConfig = itemRegistry.getType(itemType);
+        if (itemConfig) {
+          modelPath = itemConfig.modelPath || modelPath;
+          damage = itemConfig.damage || damage;
+        }
+      }
+      
+      // Create position and direction vectors
+      const position = new THREE.Vector3(x, y, z);
+      const direction = new THREE.Vector3(dirX, dirY, dirZ).normalize();
+      
+      // Import the FoodProjectile class
+      const { FoodProjectile } = require('../projectiles/FoodProjectile.js');
+      
+      // Create the projectile
+      const projectile = new FoodProjectile({
+        scene: scene,
+        position: position,
+        direction: direction,
+        path: modelPath,
+        scale: scale || 1,
+        speed: speed || 0.5,
+        gravity: gravity || 0.01,
+        arcHeight: arcHeight || 0.2,
+        lifetime: lifetime || 5000,
+        itemType: itemType || 'tomato',
+        damage: damage,
+        isOwnProjectile: false,
+        isNetworked: true,
+        onCollision: onCollision
+      });
+      
+      // Register the projectile
+      FoodProjectile.registerProjectile(projectile);
+      
+      return projectile;
+    } catch (error) {
+      console.error('Error creating networked projectile:', error);
+      return null;
+    }
+  }
+}
+
+// Helper function to draw rounded rectangles
+function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  if (fill) {
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.stroke();
   }
 } 

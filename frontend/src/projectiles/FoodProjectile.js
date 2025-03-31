@@ -6,9 +6,11 @@ import assetManager from '../utils/AssetManager.js';
 export class FoodProjectile {
     static activeProjectiles = [];
     static collidableObjects = [];
+    static DEBUG = false; // Set to true to enable debug logs
 
     static registerProjectile(projectile) {
         FoodProjectile.activeProjectiles.push(projectile);
+        if (FoodProjectile.DEBUG) console.log(`Projectile registered, total: ${FoodProjectile.activeProjectiles.length}`);
     }
 
     static updateCollidableObjects(objects) {
@@ -20,37 +22,71 @@ export class FoodProjectile {
             const projectile = FoodProjectile.activeProjectiles[i];
             projectile.update();
             
-            if (!projectile.isActive) {
+            if (!projectile.active) {
+                if (FoodProjectile.DEBUG) console.log(`Removing inactive projectile, remaining: ${FoodProjectile.activeProjectiles.length - 1}`);
                 FoodProjectile.activeProjectiles.splice(i, 1);
             }
         }
     }
 
-    constructor({ scene, position, direction, path, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000, onCollision = null }) {
+    constructor({ scene, position, direction, path, scale = 1, speed = 0.5, gravity = 0.01, arcHeight = 0.2, lifetime = 5000, onCollision = null, itemType = 'tomato', damage = 10, isOwnProjectile = false, isNetworked = false }) {
         this.scene = scene;
-        this.position = position;
-        this.direction = direction;
+        this.position = position.clone();
+        this.direction = direction.normalize();
+        this.itemType = itemType;
+        this.scale = scale;
         this.speed = speed;
         this.gravity = gravity;
         this.arcHeight = arcHeight;
         this.lifetime = lifetime;
-        this.isActive = true;
-        this.spawnTime = Date.now();
-        this.velocity = new THREE.Vector3();
-        this.scale = scale;
         this.onCollision = onCollision;
+        this.damage = damage;
+        this.spawnTime = Date.now();
+        this.velocity = this.direction.clone().multiplyScalar(this.speed);
+        this.active = true;
+        this.model = null;
+        this.modelLoaded = false;
+        this.collisionRadius = 0.25 * this.scale;
+        this.isOwnProjectile = isOwnProjectile;
+        this.isNetworked = isNetworked;
         
         // Set initial velocity with arc
-        this.velocity.copy(direction).multiplyScalar(speed);
         this.velocity.y += arcHeight;
         
-        // Load the model using AssetManager
-        assetManager.loadModel(path, (gltf) => {
-            this.model = gltf.scene;
-            this.model.scale.set(scale, scale, scale);
-            this.model.position.copy(position);
-            this.scene.add(this.model);
+        // Skip model loading - use simple sphere directly
+        this.createFallbackModel();
+        
+        // Register with projectile system
+        FoodProjectile.registerProjectile(this);
+    }
+
+    createFallbackModel() {
+        // Create a simple sphere projectile that is more reliable
+        const geometry = new THREE.SphereGeometry(this.collisionRadius, 16, 16);
+        
+        // Color based on item type - simple and effective
+        const colors = {
+            'tomato': 0xff3333,
+            'apple': 0xff0000,
+            'banana': 0xffff00,
+            'watermelon': 0x33aa33,
+            'pineapple': 0xffaa00,
+            'cake': 0xeeaa88,
+            'soda-bottle': 0x3333ff,
+            'loaf-baguette': 0xddbb66
+        };
+        
+        const color = colors[this.itemType] || (this.isOwnProjectile ? 0x00ff00 : 0xff5555);
+        
+        const material = new THREE.MeshBasicMaterial({
+            color: color,
+            wireframe: false
         });
+        
+        this.model = new THREE.Mesh(geometry, material);
+        this.model.position.copy(this.position);
+        this.scene.add(this.model);
+        this.modelLoaded = true;
     }
 
     createParticleEffect(position) {
@@ -117,133 +153,118 @@ export class FoodProjectile {
 
         animateParticles();
     }
-
-    update() {
-        if (!this.isActive || !this.model) return;
-
-        // Check lifetime
-        if (Date.now() - this.spawnTime > this.lifetime) {
-            this.destroy();
-            return;
-        }
-
-        // Apply gravity
-        this.velocity.y -= this.gravity;
-
-        // Update position
-        const nextPosition = this.model.position.clone().add(this.velocity);
+    
+    /**
+     * Create a hit effect based on what was hit
+     * @param {Object} collidable - The object that was hit
+     */
+    createHitEffect(collidable) {
+        if (!this.model) return;
         
-        // Check for collisions with static collidable objects
-        const projectileSphere = new THREE.Sphere(nextPosition, 0.2 * this.scale);
-        const raycaster = new THREE.Raycaster();
+        const hitPosition = this.model.position.clone();
         
-        // Check collision with each collidable object's meshes
-        let collision = null;
-        for (const obj of FoodProjectile.collidableObjects) {
-            // First do a quick bounding box check
-            if (!obj.box.intersectsSphere(projectileSphere)) {
-                continue;
-            }
-            
-            // If the bounding box intersects, do precise mesh collision detection
-            for (const mesh of obj.meshes) {
-                raycaster.set(this.model.position, this.velocity.clone().normalize());
-                const intersects = raycaster.intersectObject(mesh);
+        if (collidable.type === 'player') {
+            if (collidable.player) {
+                if (FoodProjectile.DEBUG) console.log(`Hit networked player: ${collidable.player.sessionId}`);
                 
-                if (intersects.some(intersect => intersect.distance < this.velocity.length())) {
-                    // We found a collision
-                    collision = {
-                        object: obj,
-                        position: this.model.position.clone()
-                    };
-                    break;
-                }
-            }
-            
-            if (collision) break;
-        }
-
-        if (collision) {
-            // If we have a collision callback, call it with the collided object
-            if (this.onCollision && typeof this.onCollision === 'function') {
-                this.onCollision(collision.object);
-            }
-            
-            // Create the appropriate hit marker effect based on what was hit
-            if (collision.object.type === 'player') {
-                if (collision.object.player) {
-                    console.log('Hit networked player:', collision.object.player.sessionId);
-                    
-                    // Create a 3D hit marker at the collision point
-                    HitMarker.create({
-                        scene: this.scene,
-                        position: this.model.position.clone(),
-                        type: 'player',
-                        color: 0xff3333, // Red color for player hits
-                        camera: window.camera // Pass the main camera
-                    });
-                    
-                    // Enhance UI hit marker to make sure it's visible
-                    this.showUiHitmarker();
-                    
-                    // We could add player hit effects or damage here for networked players
-                    // Example: collision.object.player.onHit(this);
-                } 
-                else if (collision.object.isLocalPlayer) {
-                    console.log('Hit local player!');
-                    
-                    // If we hit the local character, trigger health reduction
-                    // Get the main character instance from window
-                    const mainCharacter = window.character || character;
-                    
-                    if (mainCharacter && mainCharacter.healthManager) {
-                        // Standard damage amount (could be customized based on projectile type)
-                        const damageAmount = 5;
-                        
-                        // Apply damage to the local player
-                        mainCharacter.healthManager.removeHealth(damageAmount);
-                        
-                        // Visual hit effect
-                        this.createPlayerHitEffect();
-                    }
-                }
-            } else {
-                // Environment hit
+                // Create a 3D hit marker at the collision point
                 HitMarker.create({
                     scene: this.scene,
-                    position: this.model.position.clone(),
-                    type: 'environment',
-                    camera: window.camera
+                    position: hitPosition,
+                    type: 'player',
+                    color: 0xff3333, // Red color for player hits
+                    camera: window.camera // Pass the main camera
                 });
+                
+                // Enhance UI hit marker to make sure it's visible
+                this.showUiHitmarker();
+            } 
+            else if (collidable.isLocalPlayer) {
+                if (FoodProjectile.DEBUG) console.log('Hit local player!');
+                
+                // Create player hit flash effect
+                this.createPlayerHitEffect();
             }
-            
-            // Still create the particle effect
-            this.createParticleEffect(this.model.position);
-            
+        } else {
+            // Environment hit
+            HitMarker.create({
+                scene: this.scene,
+                position: hitPosition,
+                type: 'environment',
+                camera: window.camera
+            });
+        }
+        
+        // Always create particle effect
+        this.createParticleEffect(hitPosition);
+    }
+
+    /**
+     * Update the projectile position and check for collisions
+     */
+    update() {
+        // Skip if inactive
+        if (!this.active) return;
+        
+        // Check lifetime
+        if (Date.now() - this.spawnTime > this.lifetime) {
+            if (FoodProjectile.DEBUG) console.log("Projectile lifetime expired");
             this.destroy();
             return;
         }
-
-        // Update model position
-        this.model.position.copy(nextPosition);
         
-        // Update rotation for visual effect
-        this.model.rotation.x += 0.1;
-        this.model.rotation.z += 0.1;
+        // Update position based on velocity
+        this.position.add(this.velocity);
+        
+        // Apply gravity
+        this.velocity.y -= this.gravity;
+        
+        // Update model position
+        if (this.model) {
+            this.model.position.copy(this.position);
+            
+            // Update rotation for visual effect
+            this.model.rotation.x += 0.1;
+            this.model.rotation.z += 0.1;
+            
+            // Check for collisions when model exists
+            if (this.checkCollisions()) {
+                if (FoodProjectile.DEBUG) console.log("Projectile collision detected");
+                this.destroy();
+                return;
+            }
+        }
+        
+        // Check if this projectile has fallen below the floor
+        if (this.position.y < -5) {
+            this.destroy();
+        }
     }
 
     destroy() {
-        if (!this.isActive) return;
+        if (!this.active) return;
         
-        this.isActive = false;
+        if (FoodProjectile.DEBUG) console.log("Destroying projectile");
+        this.active = false;
+        
         if (this.model) {
             this.scene.remove(this.model);
+            
+            // Dispose of resources
             this.model.traverse((child) => {
                 if (child.isMesh) {
-                    child.geometry.dispose();
-                    child.material.dispose();
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
                 }
             });
+            
+            this.model = null;
         }
     }
 
@@ -273,7 +294,9 @@ export class FoodProjectile {
             
             // Remove from DOM after fade completes
             setTimeout(() => {
-                document.body.removeChild(hitOverlay);
+                if (hitOverlay.parentNode) {
+                    document.body.removeChild(hitOverlay);
+                }
             }, 500);
         }, 50);
     }
@@ -365,7 +388,6 @@ export class FoodProjectile {
         // Show a second "Hit!" for visual emphasis (staggered timing)
         if (Math.random() > 0.5) { // 50% chance for a second hit marker
             setTimeout(() => {
-
                 const words = ['Hit!', 'Oooof!', 'Vibes', 'Gotcha', 'Vibin!']
 
                 // Create a second hit marker
@@ -410,5 +432,104 @@ export class FoodProjectile {
                 }, 150);
             }, 70); // Slight delay from the first hit
         }
+    }
+
+    /**
+     * Check for collisions with objects in the scene
+     * @returns {boolean} true if collision occurred
+     */
+    checkCollisions() {
+        // Skip if no collidable objects or collision disabled or model not loaded
+        if (!this.active || !this.modelLoaded || !this.model || 
+            !FoodProjectile.collidableObjects || FoodProjectile.collidableObjects.length === 0) {
+            return false;
+        }
+        
+        // Create a sphere for collision detection
+        const projectileSphere = new THREE.Sphere(this.model.position, this.collisionRadius);
+        
+        // We need to rotate the trajectory direction based on the initial direction
+        const collisionVelocity = this.velocity.clone();
+        
+        // Check against all collidable objects
+        for (const collidable of FoodProjectile.collidableObjects) {
+            // Skip if invalid object
+            if (!collidable || !collidable.box) continue;
+            
+            // Skip collision with own player if this is the player's projectile
+            if (this.isOwnProjectile && collidable.isLocalPlayer) continue;
+            
+            // First do a quick bounding box check
+            if (!collidable.box.intersectsSphere(projectileSphere)) {
+                continue;
+            }
+            
+            // Then do more detailed mesh checks if meshes are available
+            if (collidable.meshes && collidable.meshes.length > 0) {
+                const collided = collidable.meshes.some(mesh => {
+                    if (!mesh) return false;
+                    
+                    // Create ray pointing in the direction of travel
+                    const raycaster = new THREE.Raycaster();
+                    const rayOrigin = this.model.position.clone().sub(collisionVelocity.clone().multiplyScalar(0.2));
+                    raycaster.set(rayOrigin, collisionVelocity.normalize());
+                    
+                    // Check for intersection
+                    const intersects = raycaster.intersectObject(mesh);
+                    return intersects.length > 0 && intersects[0].distance < this.collisionRadius * 2;
+                });
+                
+                if (collided) {
+                    if (FoodProjectile.DEBUG) console.log(`Collision detected with: ${collidable.type}${collidable.isLocalPlayer ? ' (local player)' : ''}`);
+                    
+                    // For networked projectiles hitting local player, apply damage via handleHit callback
+                    if (this.isNetworked && collidable.isLocalPlayer && collidable.handleHit) {
+                        collidable.handleHit(this.damage);
+                    }
+                    
+                    // Pass all necessary item data including isOwnProjectile flag
+                    if (this.onCollision) {
+                        this.onCollision(collidable, {
+                            id: this.itemType,
+                            damage: this.damage,
+                            scale: this.scale,
+                            isOwnProjectile: this.isOwnProjectile,
+                            isNetworked: this.isNetworked
+                        });
+                    }
+                    
+                    // Create hit effect at the collision point
+                    this.createHitEffect(collidable);
+                    
+                    return true;
+                }
+            } else {
+                // No meshes to check, just use the box - this is a simplification for performance
+                if (FoodProjectile.DEBUG) console.log(`Simple box collision with: ${collidable.type}${collidable.isLocalPlayer ? ' (local player)' : ''}`);
+                
+                // For networked projectiles hitting local player, apply damage via handleHit callback
+                if (this.isNetworked && collidable.isLocalPlayer && collidable.handleHit) {
+                    collidable.handleHit(this.damage);
+                }
+                
+                // Pass all necessary item data including isOwnProjectile flag
+                if (this.onCollision) {
+                    this.onCollision(collidable, {
+                        id: this.itemType,
+                        damage: this.damage,
+                        scale: this.scale,
+                        isOwnProjectile: this.isOwnProjectile,
+                        isNetworked: this.isNetworked
+                    });
+                }
+                
+                // Create hit effect at the collision point
+                this.createHitEffect(collidable);
+                
+                return true;
+            }
+        }
+        
+        return false;
     }
 } 
