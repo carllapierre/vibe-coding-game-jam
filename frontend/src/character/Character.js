@@ -1668,6 +1668,17 @@ export class Character {
         }, 50);
     }
 
+
+    set playerState(playerState) {
+        if (this._playerState === 'death') return;
+
+        this._playerState = playerState;
+    }
+
+    get playerState() {
+        return this._playerState;
+    }
+
     /**
      * Set the character to death state
      * @param {string} killerName - Name of the player who killed this character
@@ -1976,7 +1987,7 @@ export class Character {
         
         // Reset player state
         this.isInDeathState = false;
-        this.playerState = 'idle';
+        this._playerState = 'idle';
         
         // Teleport to respawn position
         const respawnPos = character.states.death.defaultRespawnPosition;

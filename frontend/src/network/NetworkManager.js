@@ -419,20 +419,20 @@ export class NetworkManager {
       // and ignore our own local respawn signals
       if (playerId === this.sessionId && this.localPlayer) {
         // Only handle respawn from server if the server is sending a position
-        // Otherwise, our local respawn timer is the source of truth
-        if (position && this.localPlayer.isInDeathState) {
-          console.log("Server initiated respawn with position:", position);
+        // // Otherwise, our local respawn timer is the source of truth
+        // if (position && this.localPlayer.isInDeathState) {
+        //   console.log("Server initiated respawn with position:", position);
           
-          // Let local player handle the respawn timing
-          if (this.localPlayer.respawn) {
-            // Use setTimeout to ensure we don't interrupt any ongoing death animations
-            setTimeout(() => {
-              this.localPlayer.respawn();
-            }, 100);
-          }
-        } else {
-          console.log("Ignoring respawn signal - using local respawn timing");
-        }
+        //   // Let local player handle the respawn timing
+        //   if (this.localPlayer.respawn) {
+        //     // Use setTimeout to ensure we don't interrupt any ongoing death animations
+        //     setTimeout(() => {
+        //       this.localPlayer.respawn();
+        //     }, 100);
+        //   }
+        // } else {
+        //   console.log("Ignoring respawn signal - using local respawn timing");
+        // }
       } 
       // If it's another player, update their health bar to 100%
       else {
@@ -441,16 +441,16 @@ export class NetworkManager {
           console.log(`Remote player ${playerId} respawned`);
           
           // Update player state to respawned with full health
-          player.updateState({
-            health: 100,
+          // player.updateState({
+          //   health: 100,
             // Include other state data to avoid overwriting it
-            x: player.currentPosition.x,
-            y: player.currentPosition.y, 
-            z: player.currentPosition.z,
-            rotationY: player.currentRotationY,
-            name: player.playerData.name,
-            state: 'idle' // Reset state to idle after respawn
-          });
+            // x: player.currentPosition.x,
+            // y: player.currentPosition.y, 
+            // z: player.currentPosition.z,
+            // rotationY: player.currentRotationY,
+            // name: player.playerData.name,
+            // state: 'idle' // Reset state to idle after respawn
+          //});
           
           // Force update the health bar
           player.playerData.health = 100;
@@ -458,12 +458,12 @@ export class NetworkManager {
           player.updateHealthBar(false);
           
           // Make sure model is visible again
-          if (player.model && !player.model.visible) {
-            player.model.visible = true;
-          }
+          // if (player.model && !player.model.visible) {
+          //   player.model.visible = true;
+          // }
           
           // Remove any death message
-          player.removeDeathMessage();
+          // player.removeDeathMessage();
         }
       }
     } catch (error) {

@@ -247,6 +247,7 @@ export class NetworkedPlayer {
     this.deathStartTime = null;
     this.respawnTime = null;
     this.deathMessageObject = null;
+    this.hasShownDeathMessage = false; // New flag to track if we've shown death message
     
     this.createModel();
   }
@@ -447,7 +448,8 @@ export class NetworkedPlayer {
    */
   updateState(state) {
     try {
-      
+      console.log('Player State:', state.state);
+
       // Calculate time since last update
       const now = Date.now();
       const timeDelta = (now - this.lastUpdateTime) / 1000; // in seconds
@@ -486,18 +488,15 @@ export class NetworkedPlayer {
         this.updateAnimationState(this.playerState);
       }
       
-      // Handle death state
+      // Handle death state - simply react to Character.js state
       if (state.state === 'death' && !this.isDead) {
         this.triggerDeath();
       } else if (state.state !== 'death' && this.isDead) {
-        // Player has respawned
+        // Character has finished respawning, now we can restore the model
         this.isDead = false;
-        
-        // If model was hidden, show it again
         if (this.model) {
           this.model.visible = true;
         }
-        
         // Remove any death message
         this.removeDeathMessage();
       }
@@ -740,6 +739,7 @@ export class NetworkedPlayer {
    * Trigger death effects and state
    */
   triggerDeath() {
+    if (this.hasShownDeathMessage) return;
     // Set death state
     this.isDead = true;
     this.deathStartTime = Date.now();
@@ -753,18 +753,15 @@ export class NetworkedPlayer {
         volume: 1.0,
         allowOverlap: true           // Allow multiple death sounds to overlap
       });
-      // Show random death message
+      
+      // Show random death message only if we haven't shown it yet
       this.showDeathMessage();
+      this.hasShownDeathMessage = true;
       
       // Create a big hit marker at the player's position
       this.createDeathHitMarker();
       
-      // Hide model - use a short delay to allow explosion effect to start
-      setTimeout(() => {
-        if (this.model) {
-          this.model.visible = false;
-        }
-      }, 100);
+      this.model.visible = false;
     }
   }
   
@@ -1253,6 +1250,7 @@ export class NetworkedPlayer {
       }
       
       this.deathMessageObject = null;
+      this.hasShownDeathMessage = false; // Reset the flag when removing the message
     }
   }
   
@@ -1316,11 +1314,7 @@ export class NetworkedPlayer {
         console.warn('Unable to play hit sound:', error);
       }
     }
-    
-    // Handle the death if health reaches zero
-    if (estimatedRemainingHealth <= 0 && !this.isDead) {
-      this.triggerDeath();
-    }
+  
     
     return true;
   }
