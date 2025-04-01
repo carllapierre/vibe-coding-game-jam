@@ -70,6 +70,10 @@ export class NetworkedProjectile {
      * @param {Function} params.onHitPlayer - Callback for when projectile hits player
      */
     constructor({ scene, data, onHitPlayer }) {
+
+        const projectile = ItemRegistry.getType(data.itemType);
+
+
         this.scene = scene;
         this.projectileId = data.id;
         this.sourcePlayerId = data.playerId;
@@ -81,7 +85,7 @@ export class NetworkedProjectile {
         this.speed = data.speed || 0.5;
         this.gravity = data.gravity || 0.01;
         this.scale = data.scale || 1.0;
-        this.damage = this.getDamageForItemType(this.itemType);
+        this.damage = projectile.damage || 10;
         this.velocity = this.direction.clone().multiplyScalar(this.speed);
         
         // Add arc to trajectory
@@ -137,27 +141,6 @@ export class NetworkedProjectile {
         } else {
             console.warn(`Model not found for item type: ${this.itemType}`);
         }
-    }
-    
-    /**
-     * Get damage amount for an item type
-     * @param {string} itemType - The item type
-     * @returns {number} The damage amount
-     */
-    getDamageForItemType(itemType) {
-        // Different food items can do different damage
-        const damageMap = {
-            'tomato': 10,
-            'apple': 15,
-            'banana': 8,
-            'watermelon': 25,
-            'pineapple': 20,
-            'cake': 30,
-            'soda-bottle': 10,
-            'loaf-baguette': 12
-        };
-        
-        return damageMap[itemType] || 10; // Default damage if item type not found
     }
     
     /**

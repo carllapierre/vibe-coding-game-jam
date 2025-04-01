@@ -371,6 +371,7 @@ export class Character {
         const direction = new THREE.Vector3();
         this.camera.getWorldDirection(direction);
         
+        console.log("Throwing item", itemConfig);
         // Create local projectile
         const position = this.camera.position.clone().add(direction.clone().multiplyScalar(2));
         const projectile = new FoodProjectile({
@@ -384,7 +385,7 @@ export class Character {
             arcHeight: 0.2,
             lifetime: 5000,
             itemType: itemConfig.id || 'tomato',
-            damage: itemConfig.damage || this.calculateDamageForItem(itemConfig),
+            damage: itemConfig.damage || 10,
             isOwnProjectile: true, // Mark as player's own projectile
             onCollision: (collidedObject, itemConfig) => this.handleProjectileCollision(collidedObject, itemConfig)
         });
@@ -439,7 +440,7 @@ export class Character {
                 // This is for projectiles from other players, not our own
                 if (!itemConfig.isOwnProjectile) {
                     console.log("Local player hit by remote projectile");
-                    const damage = this.calculateDamageForItem(itemConfig);
+                    const damage = itemConfig.damage || 10;
                     
                     // Use the handleHit callback on the collision object
                     if (collidedObject.handleHit) {
@@ -472,7 +473,7 @@ export class Character {
             }
             
             // Calculate damage based on item properties - should match server-side calculation
-            const damage = this.calculateDamageForItem(itemConfig);
+            const damage = itemConfig.damage || 10;
             
             // Set cooldown for this player
             this.hitCooldowns.set(playerSessionId, now + cooldownTime);
@@ -536,34 +537,6 @@ export class Character {
                 }
             }
         }
-    }
-    
-    /**
-     * Calculate damage for a specific item using the same formula as the server
-     * @param {Object} itemConfig - The item configuration 
-     * @returns {number} - The calculated damage amount
-     */
-    calculateDamageForItem(itemConfig) {
-        // Default damage values based on item type
-        const damageMap = {
-            'tomato': 10,
-            'apple': 15,
-            'banana': 8,
-            'watermelon': 25,
-            'pineapple': 20,
-            'cake': 30
-        };
-        
-        // Use item-specific damage if available, otherwise look it up in the map
-        const itemId = itemConfig.id || 'tomato';
-        
-        // If the item has explicit damage property, use that
-        if (itemConfig.damage !== undefined) {
-            return itemConfig.damage;
-        }
-        
-        // Otherwise use the damage map or default to 10
-        return damageMap[itemId] || 10;
     }
     
     /**
