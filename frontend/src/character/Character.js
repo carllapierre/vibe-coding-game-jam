@@ -123,7 +123,7 @@ export class Character {
         this.lastPlayerState = 'idle';
         
         // Movement variables
-        this.moveSpeed = 0.15;
+        this.moveSpeed = 0.14;
         this.keys = {
             w: false,
             a: false,
@@ -133,7 +133,7 @@ export class Character {
         };
 
         // Physics variables
-        this.gravity = 0.01;
+        this.gravity = 0.012;
         this.jumpForce = 0.25;
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.canJump = true;

@@ -586,41 +586,14 @@ export class NetworkedPlayer {
       return;
     }
     
-    // Choose animation parameters based on distance
-    let duration, ease;
-    
-    if (distance > 5) {
-      duration = 0.15;
-      ease = "power1.out";
-    } else if (distance > 2) {
-      duration = 0.25;
-      ease = "power2.out";
-    } else if (distance > 0.5) {
-      duration = 0.3;
-      ease = "power3.out";
-    } else {
-      duration = Math.min(0.4, Math.max(0.2, distance * 0.6));
-      ease = "sine.out";
-    }
-    
-    // Apply prediction for smoother movement
-    const predictedPosition = newPosition.clone();
-    
-    if (distance < 3 && this.velocity.lengthSq() > 0.01) {
-      predictedPosition.add(
-        this.velocity.clone().multiplyScalar(duration * 0.5)
-      );
-    }
-    
-    // Animate the current position
+    // Simple direct movement without prediction
     this.currentAnimation = gsap.to(this.currentPosition, {
-      x: predictedPosition.x,
-      y: predictedPosition.y, // Keep original Y from server
-      z: predictedPosition.z,
-      duration: duration,
-      ease: ease,
+      x: newPosition.x,
+      y: newPosition.y,
+      z: newPosition.z,
+      duration: 0.2, // Short duration for responsiveness
+      ease: "none", // Linear movement
       onUpdate: () => {
-        // Update the actual model position with camera height adjustment
         if (this.model) {
           this.model.position.x = this.currentPosition.x;
           this.model.position.z = this.currentPosition.z;
@@ -640,37 +613,12 @@ export class NetworkedPlayer {
       }
     });
     
-    // Calculate the shortest rotation path 
+    // Simple rotation without prediction
     if (this.model) {
-      // Find the shortest angle between current and target rotation
-      let currentAngle = this.model.rotation.y - (this.modelRotationOffset || 0);
-      let targetAngle = this.targetRotationY;
-      
-      // Normalize angles to 0-2π range
-      while (currentAngle < 0) currentAngle += Math.PI * 2;
-      while (targetAngle < 0) targetAngle += Math.PI * 2;
-      
-      // Find the shortest path
-      let angleDiff = targetAngle - currentAngle;
-      
-      // If angle difference is greater than 180 degrees (π radians), go the other way
-      if (Math.abs(angleDiff) > Math.PI) {
-        if (angleDiff > 0) {
-          angleDiff -= Math.PI * 2;
-        } else {
-          angleDiff += Math.PI * 2;
-        }
-      }
-      
-      // Calculate the target angle using the shortest path and add the model offset
-      const shortestPathTarget = currentAngle + angleDiff;
-      const finalRotation = shortestPathTarget + (this.modelRotationOffset || 0);
-      
-      // Animate rotation
       gsap.to(this.model.rotation, {
-        y: finalRotation,
-        duration: Math.min(duration * 1.2, 0.4),
-        ease: "sine.out",
+        y: this.targetRotationY + (this.modelRotationOffset || 0),
+        duration: 0.2,
+        ease: "none",
         onUpdate: () => {
           this.currentRotationY = this.model.rotation.y - (this.modelRotationOffset || 0);
         }
@@ -685,36 +633,6 @@ export class NetworkedPlayer {
     // Update animation mixer if available
     if (this.animationManager) {
       this.animationManager.update(delta);
-    }
-    
-    // Apply predictive movement between network updates
-    if (!this.currentAnimation && this.velocity.lengthSq() > 0.01) {
-      // Reduce velocity over time
-      this.velocity.multiplyScalar(0.95);
-      
-      // Apply predicted movement
-      const movement = this.velocity.clone().multiplyScalar(delta);
-      
-      // Update the current position (base position)
-      this.currentPosition.x += movement.x;
-      this.currentPosition.z += movement.z;
-      this.currentPosition.y += movement.y;
-      
-      // Apply the change to the model's position with camera height adjustment
-      if (this.model) {
-        this.model.position.x = this.currentPosition.x;
-        this.model.position.z = this.currentPosition.z;
-        
-        // Apply camera height offset
-        const isJumping = Math.abs(this.currentPosition.y) > 0.5;
-        const modelY = isJumping ? 
-          this.currentPosition.y - this.cameraHeightOffset : 0;
-          
-        this.model.position.y = modelY;
-        
-        // Update bounding box position
-        this.updateBoundingBoxPosition();
-      }
     }
   }
   
