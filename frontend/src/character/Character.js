@@ -521,7 +521,12 @@ export class Character {
                     // The server will notify other players through the network
                     try {
                         if (AudioManager) {
-                            AudioManager.play('hit', { volume: 0.6 });
+                            AudioManager.play('hit', { 
+                                volume: 1.0,                // Full volume
+                                pitchMin: 0.4,              // Extremely low pitch possible
+                                pitchMax: 1.6,              // Extremely high pitch possible
+                                allowOverlap: true          // Allow sounds to overlap
+                            });
                         }
                     } catch (error) {
                         console.warn('Unable to play hit sound:', error);
@@ -1710,6 +1715,21 @@ export class Character {
         this.respawnCountdown = character.states.death.respawnTime;
         this.killerName = killerName;
         this.weaponType = weaponType;
+        
+        // Play death sound (non-spatial for local player)
+        try {
+            if (AudioManager) {
+                console.log("%c[LOCAL PLAYER DEATH SOUND]", "background: #ff0000; color: white; font-size: 16px;");
+                AudioManager.play('death', { 
+                    volume: 1.0,           // Full volume
+                    pitchMin: 0.9,         // Less variation for death
+                    pitchMax: 1.1,
+                    allowOverlap: false    // Don't allow multiple death sounds
+                });
+            }
+        } catch (error) {
+            console.warn('Unable to play death sound:', error);
+        }
         
         // Lock controls when dead
         this.setEnabled(false);

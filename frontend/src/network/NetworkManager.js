@@ -327,7 +327,13 @@ export class NetworkManager {
       // since we're at the hit position
       try {
         if (AudioManager) {
-          AudioManager.play('hit', { volume: 0.8 });
+          console.log("%c[PLAYING LOCAL PLAYER HIT SOUND]", "background: #ff00ff; color: white; font-size: 16px;");
+          AudioManager.play('hit', { 
+            volume: 1.0,                // Full volume for direct hits
+            pitchMin: 0.4,              // Extremely low pitch possible  
+            pitchMax: 1.6,              // Extremely high pitch possible
+            allowOverlap: true          // Allow sounds to overlap
+          });
         }
       } catch (error) {
         console.warn('Unable to play hit sound:', error);
@@ -704,7 +710,14 @@ export class NetworkManager {
       // Play hit sound for the thrower
       try {
         if (AudioManager) {
-          AudioManager.play('hit', { volume: 0.6 });
+          console.log('[AUDIO] Playing hit confirmation sound for network hit');
+          AudioManager.play('hit', { 
+            volume: 0.7,
+            pitchMin: 0.7,
+            pitchMax: 1.3,
+            allowOverlap: true,
+            debug: true
+          });
         }
       } catch (error) {
         console.warn('Unable to play hit sound:', error);

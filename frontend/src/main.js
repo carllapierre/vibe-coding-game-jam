@@ -345,7 +345,7 @@ async function initializeWorld() {
         RadioPlayer.initialize();
         // Set initial volumes
         RadioPlayer.setVolume(0.01); // Start at low volume for background music
-        AudioManager.setSfxVolume(0.07); // Start at 70% volume for sound effects
+        AudioManager.setSfxVolume(0.2); // Start at 70% volume for sound effects
         
         loadingScreen.updateProgress(95);
         

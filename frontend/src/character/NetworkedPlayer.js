@@ -831,6 +831,10 @@ export class NetworkedPlayer {
       // Create death explosion effect before hiding model
       this.createDeathExplosion();
       
+      AudioManager.play('death', {
+        volume: 1.0,
+        allowOverlap: true           // Allow multiple death sounds to overlap
+      });
       // Show random death message
       this.showDeathMessage();
       
@@ -1371,27 +1375,25 @@ export class NetworkedPlayer {
     if (window.mainCamera && AudioManager) {
       try {
         // Get local player position as the listener
-        const listener = window.mainCamera.position;
+        const listener = window.mainCamera.position.clone(); // Make sure to clone to avoid reference issues
         
         // Use this player's position as the source
-        const source = this.currentPosition;
+        const source = this.currentPosition.clone(); // Clone to avoid reference issues
         
-        // Calculate distance to determine if sound should be played
-        const dx = source.x - listener.x;
-        const dy = source.y - listener.y;
-        const dz = source.z - listener.z;
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // For extreme clarity, use console to show positions
+        console.log("%c[HIT SOUND POSITIONS]", "background: #ff0000; color: white; font-size: 16px;");
+        console.log("Player hit position:", {x: source.x, y: source.y, z: source.z});
+        console.log("Camera/listener position:", {x: listener.x, y: listener.y, z: listener.z});
         
-        // Only play if within audible range (less than maxDistance)
-        const maxDistance = 40;
-        if (distance < maxDistance) {
-          // Play spatial hitmarker sound
-          AudioManager.playSpatial('hit', source, listener, {
-            maxDistance: maxDistance,    // Can be heard from far away
-            minDistance: 5,              // Full volume within 5 units
-            volumeMultiplier: 0.8        // Slightly reduced volume
-          });
-        }
+        // Apply SUPER extreme audio settings for testing
+        AudioManager.playSpatial('hit', source, listener, {
+          maxDistance: 20,              // Shorter distance for more noticeable falloff
+          minDistance: 1,               // Only full volume when very close
+          volumeMultiplier: 1.5,        // Boost volume for testing
+          pitchMin: 0.4,                // Extremely low pitch possible
+          pitchMax: 1.6,                // Extremely high pitch possible
+          allowOverlap: true            // Allow sounds to overlap
+        });
       } catch (error) {
         console.warn('Unable to play hit sound:', error);
       }
