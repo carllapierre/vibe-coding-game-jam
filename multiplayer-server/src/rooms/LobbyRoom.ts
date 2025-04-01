@@ -62,12 +62,7 @@ export class LobbyRoom extends Room<LobbyState> {
       
       // If player health is depleted
       if (hitPlayer.health <= 0) {
-        // Increment score for the source player (who threw the projectile)
-        const sourcePlayer = this.state.players.get(targetId);
-        if (sourcePlayer) {
-          sourcePlayer.score += 10; // 10 points for a kill
-          console.log(`${targetId}'s score increased to ${sourcePlayer.score}`);
-        }
+        // Don't increment score here, will be handled by killAttribution
         
         // Schedule respawn
         this.respawnPlayer(hitPlayer);
@@ -131,10 +126,7 @@ export class LobbyRoom extends Room<LobbyState> {
       
       // If player health is depleted
       if (targetPlayer.health <= 0) {
-        // Increment score for the source player
-        sourcePlayer.score += 10; // 10 points for a kill
-        console.log(`${sourceId}'s score increased to ${sourcePlayer.score}`);
-        
+        // Don't increment score here, it will be handled by killAttribution
         // Schedule respawn
         this.respawnPlayer(targetPlayer);
       }
@@ -155,17 +147,45 @@ export class LobbyRoom extends Room<LobbyState> {
       // This helps with reliable delivery of hit events
       const targetClient = this.clients.find(c => c.sessionId === targetId);
       if (targetClient) {
-        targetClient.send("playerDamaged", {
+        targetClient.send("playerHit", {
           hitId: hitId,
           targetId: targetId,
           sourceId: sourceId || client.sessionId,
           damage: damage,
-          itemType: itemType,
-          remainingHealth: targetPlayer.health,
-          timestamp: Date.now(),
-          direct: true // Flag indicating this is a direct message
+          itemType: itemType
         });
       }
+    });
+    
+    // Handle kill attribution from clients
+    this.onMessage("killAttribution", (client, message) => {
+      const { killerId } = message;
+      
+      // Get the killer
+      const killer = this.state.players.get(killerId);
+      if (!killer) {
+        console.log(`Killer ${killerId} not found for kill attribution`);
+        return;
+      }
+      
+      // Increment the killer's score
+      killer.score += 1;
+      console.log(`Player ${killerId} scored a kill, new score: ${killer.score}`);
+      
+      // Broadcast leaderboard update to all clients
+      const leaderboardData = this.getLeaderboardData();
+      this.broadcast("leaderboardUpdate", leaderboardData);
+    });
+    
+    // Handle request for leaderboard data
+    this.onMessage("requestLeaderboard", (client) => {
+      console.log(`Player ${client.sessionId} requested leaderboard data`);
+      
+      // Get the current leaderboard data
+      const leaderboardData = this.getLeaderboardData();
+      
+      // Send the leaderboard data to the client who requested it
+      client.send("leaderboardUpdate", leaderboardData);
     });
   }
 
@@ -219,6 +239,10 @@ export class LobbyRoom extends Room<LobbyState> {
     player.clientId = options.clientId || null;
     
     this.state.players.set(client.sessionId, player);
+    
+    // Broadcast updated leaderboard after player joins
+    const leaderboardData = this.getLeaderboardData();
+    this.broadcast("leaderboardUpdate", leaderboardData);
   }
 
   onLeave (client: Client, consented: boolean) {
@@ -229,6 +253,10 @@ export class LobbyRoom extends Room<LobbyState> {
     
     // Remove the player from the state
     this.state.players.delete(client.sessionId);
+    
+    // Broadcast updated leaderboard after player leaves
+    const leaderboardData = this.getLeaderboardData();
+    this.broadcast("leaderboardUpdate", leaderboardData);
   }
 
   onDispose() {
@@ -240,5 +268,23 @@ export class LobbyRoom extends Room<LobbyState> {
   update(deltaTime: number) {
     // Handle game state updates, AI, physics, etc.
     // For now, this is a simple placeholder for future game logic
+  }
+  
+  /**
+   * Get leaderboard data for all players
+   * @returns Array of player data for leaderboard
+   */
+  getLeaderboardData(): Array<{id: string, name: string, score: number}> {
+    const players: Array<{id: string, name: string, score: number}> = [];
+    
+    this.state.players.forEach((player, sessionId) => {
+      players.push({
+        id: sessionId,
+        name: player.name,
+        score: player.score
+      });
+    });
+    
+    return players;
   }
 }

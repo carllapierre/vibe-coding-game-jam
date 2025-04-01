@@ -31,6 +31,9 @@ export class NetworkManager {
     // Tracking for projectiles
     this.lastProjectileId = 0;
     
+    // Create the leaderboard
+    this.leaderboard = null;
+    
     // Bind methods
     this.update = this.update.bind(this);
     this.onPlayerJoined = this.onPlayerJoined.bind(this);
@@ -39,6 +42,7 @@ export class NetworkManager {
     this.onProjectileCreated = this.onProjectileCreated.bind(this);
     this.onPlayerDamaged = this.onPlayerDamaged.bind(this);
     this.onPlayerRespawned = this.onPlayerRespawned.bind(this);
+    this.onLeaderboardUpdate = this.onLeaderboardUpdate.bind(this);
   }
   
   /**
@@ -83,6 +87,9 @@ export class NetworkManager {
       this.colyseusManager.on('playerDamaged', this.onPlayerDamaged);
       this.colyseusManager.on('playerRespawned', this.onPlayerRespawned);
       
+      // Set up leaderboard event listener
+      this.colyseusManager.on('leaderboardUpdate', this.onLeaderboardUpdate);
+      
       // Connect to the server
       const room = await this.colyseusManager.connect(playerName, characterModel);
       
@@ -105,6 +112,9 @@ export class NetworkManager {
         this.localPlayer.setNetworkedPlayers(this.playerManager.players);
       }
       
+      // Initialize the leaderboard
+      this.initializeLeaderboard();
+      
       // Make NetworkManager globally available for projectile sending
       window.networkManager = this;
       
@@ -113,6 +123,76 @@ export class NetworkManager {
       this.isConnected = false;
       throw error;
     }
+  }
+  
+  /**
+   * Initialize the leaderboard UI
+   */
+  initializeLeaderboard() {
+    try {
+      // Import dynamically to prevent issues with circular dependencies
+      import('../ui/Leaderboard.js').then(module => {
+        const Leaderboard = module.Leaderboard;
+        this.leaderboard = new Leaderboard();
+        
+        // Request initial leaderboard data
+        this.requestLeaderboardData();
+        
+        // Also request a leaderboard update from the server
+        if (this.isConnected && this.colyseusManager && this.colyseusManager.room) {
+          this.colyseusManager.room.send('requestLeaderboard');
+        }
+      });
+    } catch (error) {
+      console.error('Failed to initialize leaderboard:', error);
+    }
+  }
+  
+  /**
+   * Request leaderboard data from the server
+   */
+  requestLeaderboardData() {
+    if (!this.isConnected) return;
+    
+    // For now, we'll use the initial state of all players
+    const players = [];
+    
+    // Add all remote players to the leaderboard
+    for (const [sessionId, player] of Object.entries(this.colyseusManager.remotePlayers)) {
+      players.push({
+        id: sessionId,
+        name: player.name || `Player ${sessionId.substring(0, 4)}`,
+        score: player.score || 0
+      });
+    }
+    
+    // Add local player to the leaderboard
+    if (this.sessionId) {
+      const localPlayerData = this.colyseusManager.room.state.players.get(this.sessionId);
+      if (localPlayerData) {
+        players.push({
+          id: this.sessionId,
+          name: localPlayerData.name || `Player ${this.sessionId.substring(0, 4)}`,
+          score: localPlayerData.score || 0
+        });
+      }
+    }
+    
+    // Update the leaderboard
+    if (this.leaderboard) {
+      this.leaderboard.updateLeaderboard(players);
+    }
+  }
+  
+  /**
+   * Handle leaderboard update from server
+   * @param {Array} players - Updated player data for the leaderboard
+   */
+  onLeaderboardUpdate(players) {
+    if (!this.leaderboard) return;
+    
+    console.log('Received leaderboard update:', players);
+    this.leaderboard.updateLeaderboard(players);
   }
   
   /**
@@ -500,8 +580,8 @@ export class NetworkManager {
               const killerWeapon = itemType || 'tomato';
               const killerName = this.getPlayerNameById(sourceId) || 'Someone';
               
-              // Trigger death state with the killer's name and weapon
-              this.localPlayer.setDeathState(killerName, killerWeapon);
+              // Trigger death state with the killer's name, weapon, and ID
+              this.localPlayer.setDeathState(killerName, killerWeapon, sourceId);
             }
           }
         }
@@ -725,6 +805,25 @@ export class NetworkManager {
       
     } catch (error) {
       console.error('Error sending player hit:', error);
+    }
+  }
+  
+  /**
+   * Send kill attribution to the server when a player is killed
+   * @param {string} killerId - ID of the player who got the kill
+   */
+  sendKillAttribution(killerId) {
+    if (!this.isConnected || !killerId) return;
+    
+    try {
+      console.log(`Sending kill attribution: ${killerId} got a kill`);
+      
+      // Send kill data to server
+      this.colyseusManager.room.send('killAttribution', {
+        killerId: killerId
+      });
+    } catch (error) {
+      console.error('Error sending kill attribution:', error);
     }
   }
 } 

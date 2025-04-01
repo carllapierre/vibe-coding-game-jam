@@ -246,6 +246,12 @@ export class ColyseusManager extends EventEmitter {
       console.log(`Received playerHit event: target=${data.targetId}, source=${data.sourceId}, damage=${data.damage}`);
       this.emit('playerHit', data);
     });
+    
+    // Listen for leaderboard updates
+    this.room.onMessage('leaderboardUpdate', (data) => {
+      console.log(`Received leaderboard update`);
+      this.emit('leaderboardUpdate', data);
+    });
   }
   
   /**

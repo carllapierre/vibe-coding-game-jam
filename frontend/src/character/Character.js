@@ -1677,8 +1677,9 @@ export class Character {
      * Set the character to death state
      * @param {string} killerName - Name of the player who killed this character
      * @param {string} weaponType - Type of weapon that killed the character
+     * @param {string} killerId - ID of the player who killed this character
      */
-    setDeathState(killerName = null, weaponType = null) {
+    setDeathState(killerName = null, weaponType = null, killerId = null) {
         console.log("Setting death state for character");
         // Don't set if already in death state
         if (this.isInDeathState) {
@@ -1693,6 +1694,13 @@ export class Character {
         this.respawnCountdown = character.states.death.respawnTime;
         this.killerName = killerName;
         this.weaponType = weaponType;
+        this.killerId = killerId; // Store killer ID
+        
+        // Send kill attribution to server if we have a killer ID
+        if (killerId && window.networkManager && window.networkManager.isConnected) {
+            console.log(`Sending kill attribution to server: ${killerId} killed local player`);
+            window.networkManager.sendKillAttribution(killerId);
+        }
         
         // Play death sound (non-spatial for local player)
         try {
