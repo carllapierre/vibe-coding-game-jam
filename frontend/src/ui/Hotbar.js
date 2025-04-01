@@ -15,12 +15,220 @@ export class Hotbar {
         // Cache for rendered images by item type
         this.imageCache = {};
         
-        // Register for amount updates
+        // Track the last selected slot to detect changes
+        this.lastSelectedSlot = -1;
+        
+        // Create UI elements first
+        this.createHotbarUI();
+        this.createItemDisplay();
+        
+        // Now that UI is fully initialized, register for amount updates
         this.inventory.setAmountChangeCallback((index, amount) => {
             this.updateSlot(index);
         });
         
-        this.createHotbarUI();
+        // Perform initial UI update
+        this.update();
+    }
+
+    // Format item name from ID (remove hyphens, capitalize first letters)
+    formatItemName(itemId) {
+        if (!itemId) return '';
+        return itemId
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    createItemDisplay() {
+        // Create the item display container
+        this.itemDisplay = document.createElement('div');
+        this.itemDisplay.className = 'item-display';
+        this.itemDisplay.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 120px;
+            background: linear-gradient(135deg, #6b9ac4 0%, #486f9d 100%);
+            border: 2px solid #ffffffa0;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            font-family: sans-serif;
+            box-shadow: 0 4px 15px rgba(72, 111, 157, 0.3);
+            transform-origin: top left;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        `;
+
+        // Create preview container
+        const previewContainer = document.createElement('div');
+        previewContainer.style.cssText = `
+            width: 90px;
+            height: 90px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            position: relative;
+            margin-bottom: 10px;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        `;
+
+        // Create image element for the preview
+        this.itemPreviewImg = document.createElement('img');
+        this.itemPreviewImg.style.cssText = `
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        `;
+        previewContainer.appendChild(this.itemPreviewImg);
+        this.itemDisplay.appendChild(previewContainer);
+
+        // Create item name display
+        this.itemNameDisplay = document.createElement('div');
+        this.itemNameDisplay.style.cssText = `
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+            color: #fff;
+        `;
+        this.itemDisplay.appendChild(this.itemNameDisplay);
+
+        // Create damage display container
+        const damageContainer = document.createElement('div');
+        damageContainer.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 5px;
+            background: rgba(255, 255, 255, 0.25);
+            padding: 5px 10px;
+            border-radius: 12px;
+        `;
+
+        // Create damage value display
+        this.damageDisplay = document.createElement('div');
+        this.damageDisplay.style.cssText = `
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0px 0px 4px rgba(0, 0, 0, 0.7);
+        `;
+        damageContainer.appendChild(this.damageDisplay);
+        
+        // Add DMG text
+        const dmgText = document.createElement('div');
+        dmgText.textContent = 'DMG';
+        dmgText.style.cssText = `
+            font-size: 14px;
+            color: #ffffffcc;
+            text-shadow: 0px 0px 3px rgba(0, 0, 0, 0.7);
+        `;
+        damageContainer.appendChild(dmgText);
+        
+        this.itemDisplay.appendChild(damageContainer);
+
+        document.body.appendChild(this.itemDisplay);
+        
+        // Initial update
+        this.updateItemDisplay();
+    }
+
+    updateItemDisplay() {
+        // Safety check - make sure the item display elements exist
+        if (!this.itemPreviewImg || !this.itemNameDisplay || !this.damageDisplay) {
+            return;
+        }
+        
+        const selectedIndex = this.inventory.selectedSlot;
+        const itemData = this.inventory.getSlot(selectedIndex);
+        
+        if (itemData && itemData.item) {
+            // Check if display is currently hidden
+            const wasHidden = this.itemDisplay.style.display === 'none' || this.itemDisplay.style.opacity === '0';
+            
+            // Show the display
+            this.itemDisplay.style.display = 'flex';
+            this.itemDisplay.style.opacity = '1';
+            this.itemDisplay.style.transform = 'scale(1)';
+            
+            // Apply animation only when transitioning from hidden to shown
+            if (wasHidden) {
+                // Remove existing animation if any
+                this.itemDisplay.style.animation = '';
+                
+                // Force a reflow to restart animation
+                void this.itemDisplay.offsetWidth;
+                
+                // Add bounce and shake animation
+                this.itemDisplay.style.animation = 'itemAppear 0.5s ease-out';
+                
+                // Add animation keyframes if not already added
+                if (!document.getElementById('hotbarAnimations')) {
+                    const style = document.createElement('style');
+                    style.id = 'hotbarAnimations';
+                    style.textContent = `
+                        @keyframes itemAppear {
+                            0% {
+                                transform: scale(0.5);
+                                opacity: 0;
+                            }
+                            50% {
+                                transform: scale(1.1) rotate(2deg);
+                            }
+                            70% {
+                                transform: scale(0.95) rotate(-1deg);
+                            }
+                            85% {
+                                transform: scale(1.05) rotate(1deg);
+                            }
+                            100% {
+                                transform: scale(1) rotate(0);
+                                opacity: 1;
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+            
+            // Update image
+            this.getItemImage(itemData.item).then(dataUrl => {
+                this.itemPreviewImg.src = dataUrl;
+                this.itemPreviewImg.style.display = 'block';
+            });
+            
+            // Get item config to access damage
+            const itemConfig = this.itemRegistry.getType(itemData.item);
+            
+            // Update name
+            this.itemNameDisplay.textContent = this.formatItemName(itemData.item);
+            
+            // Update damage
+            if (itemConfig && itemConfig.damage !== undefined) {
+                this.damageDisplay.textContent = itemConfig.damage;
+            } else {
+                this.damageDisplay.textContent = '-';
+            }
+        } else {
+            // Hide display when no item is selected
+            this.itemDisplay.style.opacity = '0';
+            this.itemDisplay.style.transform = 'scale(0.8)';
+            
+            // Actually hide after transition
+            setTimeout(() => {
+                if (this.itemDisplay.style.opacity === '0') {
+                    this.itemDisplay.style.display = 'none';
+                }
+            }, 300);
+        }
     }
 
     createHotbarUI() {
@@ -147,11 +355,9 @@ export class Hotbar {
             if (document.pointerLockElement) {  // Only scroll when in game
                 const direction = e.deltaY > 0 ? 1 : -1;
                 this.inventory.scrollHotbar(direction);
-                this.update();
+                this.update();  // Add this back to update the UI when scrolling
             }
         });
-        
-        this.update();
     }
 
     // Get cached image or generate a new one
@@ -185,6 +391,10 @@ export class Hotbar {
                 const model = gltf.scene;
                 model.scale.multiplyScalar(itemConfig.scale * 3);
                 model.position.set(0, -0.3, 0);
+                
+                // Add rotation to the model for a more dynamic view
+                model.rotation.x = Math.PI * 0.1; // slight tilt forward
+                model.rotation.y = Math.PI * 0.25; // rotate to show more sides
                 
                 tempScene.add(model);
                 
@@ -246,9 +456,21 @@ export class Hotbar {
         const isSelected = index === this.inventory.selectedSlot;
         slot.style.border = isSelected ? '2px solid #ffffff' : '2px solid #ffffff40';
         slot.style.background = isSelected ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+        
+        // Update item display if this is the selected slot
+        if (isSelected) {
+            this.updateItemDisplay();
+        }
     }
 
     update() {
+        // Check if selected slot has changed
+        if (this.lastSelectedSlot !== this.inventory.selectedSlot) {
+            this.lastSelectedSlot = this.inventory.selectedSlot;
+            // Update item display when selection changes
+            this.updateItemDisplay();
+        }
+        
         const slots = this.container.children;
         for (let i = 0; i < slots.length; i++) {
             this.updateSlot(i);
@@ -266,6 +488,11 @@ export class Hotbar {
         
         // Clear cache
         this.imageCache = {};
+        
+        // Remove the item display from DOM
+        if (this.itemDisplay && this.itemDisplay.parentNode) {
+            this.itemDisplay.parentNode.removeChild(this.itemDisplay);
+        }
         
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
