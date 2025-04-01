@@ -246,11 +246,17 @@ SpawnableRegistry.updateSpawnableProperties(['wine-white', 'wine-red', 'peanut-b
 });
 
 
-SpawnableRegistry.updateSpawnableProperties(['cake'], {
+SpawnableRegistry.updateSpawnableProperties(['cake', 'beer-barrel'], {
     glowColor: spawnerConfig.colors.rare, //purple
     shadowColor: spawnerConfig.colors.rare,
     particleColor: spawnerConfig.colors.rare,
 });
+
+SpawnableRegistry.updateSpawnableProperties(['beer-barrel'], {
+    quantityMin: 1, 
+    quantityMax: 1,
+});
+
 
 // 3. Initialize world manager (which now doesn't register items again)
 const worldManager = new WorldManager(scene);

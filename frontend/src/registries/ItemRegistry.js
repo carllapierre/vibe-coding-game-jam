@@ -10,7 +10,7 @@ export class ItemRegistry extends Registry {
         { id: 'meat-raw', model: 'meat-raw.glb', scale: 0.6, damage: 15 },
         { id: 'meat-ribs', model: 'meat-ribs.glb', scale: 0.8, damage: 23 },
         { id: 'meat-sausage', model: 'meat-sausage.glb', scale: 0.7, damage: 17 },
-        { id: 'sausage', model: 'sausage.glb', scale: 0.6, damage: 16 },
+        { id: 'sausage', model: 'sausage.glb', scale: 1.1, damage: 16 },
         { id: 'sausage-half', model: 'sausage-half.glb', scale: 0.6, damage: 10 },
         { id: 'whole-ham', model: 'whole-ham.glb', scale: 0.7, damage: 24 },
         { id: 'bacon-raw', model: 'bacon-raw.glb', scale: 0.6, damage: 14 },
@@ -34,9 +34,9 @@ export class ItemRegistry extends Registry {
         { id: 'tomato-slice', model: 'tomato-slice.glb', scale: 0.5, damage: 5 },
         { id: 'watermelon', model: 'watermelon.glb', scale: 0.7, damage: 25 },
         { id: 'strawberry', model: 'strawberry.glb', scale: 0.4, damage: 8 },
-        { id: 'pumpkin', model: 'pumpkin.glb', scale: 0.6, damage: 22 },
+        { id: 'pumpkin', model: 'pumpkin.glb', scale: 1, damage: 22 },
         { id: 'pumpkin-basic', model: 'pumpkin-basic.glb', scale: 0.6, damage: 22 },
-        { id: 'pineapple', model: 'pineapple.glb', scale: 0.6, damage: 20 },
+        { id: 'pineapple', model: 'pineapple.glb', scale: 1, damage: 20 },
         { id: 'pear', model: 'pear.glb', scale: 0.5, damage: 12 },
         { id: 'pear-half', model: 'pear-half.glb', scale: 0.5, damage: 6 },
         { id: 'orange', model: 'orange.glb', scale: 0.5, damage: 12 },
@@ -55,7 +55,7 @@ export class ItemRegistry extends Registry {
         { id: 'sandwich', model: 'sandwich.glb', scale: 0.6, damage: 16 },
         { id: 'salad', model: 'salad.glb', scale: 0.6, damage: 12 },
         { id: 'sub', model: 'sub.glb', scale: 0.7, damage: 18 },
-        { id: 'taco', model: 'taco.glb', scale: 0.6, damage: 15 },
+        { id: 'taco', model: 'taco.glb', scale: 1.1, damage: 15 },
         { id: 'rice-ball', model: 'rice-ball.glb', scale: 0.5, damage: 9 },
 
         // Sushi and Seafood
@@ -87,6 +87,7 @@ export class ItemRegistry extends Registry {
         { id: 'soda-can', model: 'soda-can.glb', scale: 0.5, damage: 10 },
         { id: 'soda-glass', model: 'soda-glass.glb', scale: 0.6, damage: 12 },
         { id: 'cup-coffee', model: 'cup-coffee.glb', scale: 1, damage: 15 },
+        { id: 'beer-barrel', model: 'barrel.glb', scale: 0.8, damage: 50 },
 
         // Condiments
         { id: 'soy', model: 'soy.glb', scale: 0.5, damage: 8 },
