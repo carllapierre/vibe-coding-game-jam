@@ -155,9 +155,6 @@ export class Character {
         // Initialize controls - this will use the camera's current orientation
         this.controls = new PointerLockControls(camera, document.body);
         
-        // Show loading screen
-        this.showLoadingScreen();
-        
         // Hand setup
         this.setupHand();
         
@@ -189,13 +186,10 @@ export class Character {
             jump: false
         };
         
-        // Auto-lock controls after a short delay to allow page to fully load
-        setTimeout(() => {
-            if (this.enabled) {
-                this.controls.lock();
-                this.hideLoadingScreen();
-            }
-        }, 500);
+        // Auto-lock controls immediately
+        if (this.enabled) {
+            this.controls.lock();
+        }
 
         // Network players hit detection
         this.networkedPlayers = [];

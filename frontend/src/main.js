@@ -307,23 +307,16 @@ async function initializeMultiplayer(character) {
 // Load the world after all registries are initialized
 async function initializeWorld() {
     try {
-        // Show loading screen
-        loadingScreen.show();
-        loadingScreen.updateProgress(5);
-        
         // Create skybox
         await new Promise(resolve => {
             setTimeout(() => {
                 createSkybox();
-                loadingScreen.updateProgress(15);
                 resolve();
             }, 100);
         });
         
         // Load all objects from the world
-        loadingScreen.updateProgress(20);
         await worldManager.loadObjects();
-        loadingScreen.updateProgress(50);
         
         collidableObjects = worldManager.getCollidableObjects();
         // Update character's collidable objects reference
@@ -331,23 +324,17 @@ async function initializeWorld() {
         // Update FoodProjectile's static collidable objects
         FoodProjectile.updateCollidableObjects(collidableObjects);
         
-        loadingScreen.updateProgress(60);
-        
         // Initialize spawners after objects are loaded
         await worldManager.initializeSpawners(character);
-        loadingScreen.updateProgress(75);
         
         // Load posters
         await worldManager.loadPosters();
-        loadingScreen.updateProgress(90);
         
         // Initialize the radio player
         RadioPlayer.initialize();
         // Set initial volumes
         RadioPlayer.setVolume(0.25); // Start at low volume for background music
         AudioManager.setSfxVolume(0.25); // Start at 70% volume for sound effects
-        
-        loadingScreen.updateProgress(95);
         
         // Initialize multiplayer only if enabled
         if (ENABLE_MULTIPLAYER) {
@@ -357,22 +344,12 @@ async function initializeWorld() {
                 console.error('Failed to initialize multiplayer:', error);
                 console.warn('Continuing in single-player mode due to multiplayer error');
             }
-        } 
+        }
         
-        loadingScreen.updateProgress(100);
-        
-        // Give a brief moment to see 100% before hiding
-        setTimeout(() => {
-            // Hide loading screen
-            loadingScreen.hide();
-            
-            // Start animation loop after world and multiplayer are initialized
-            animationFrameId = requestAnimationFrame(animate);
-        }, 500);
+        // Start animation loop after world and multiplayer are initialized
+        animationFrameId = requestAnimationFrame(animate);
     } catch (error) {
         console.error("Error initializing world:", error);
-        // Hide loading screen in case of error
-        loadingScreen.hide();
         
         // Show error to user
         const errorOverlay = document.createElement('div');
@@ -511,17 +488,10 @@ function frameStep(currentTime) {
     postProcessing.render();
 }
 
-// Show loading screen immediately
-loadingScreen.show();
-loadingScreen.updateProgress(2);
-
-// Start initialization after a small delay to ensure loading screen is visible
-setTimeout(() => {
-    initializeWorld().catch(error => {
-        console.error("Error in initializeWorld:", error);
-        loadingScreen.hide();
-    });
-}, 100);
+// Start initialization immediately
+initializeWorld().catch(error => {
+    console.error("Error in initializeWorld:", error);
+});
 
 // Add cleanup on window unload
 window.addEventListener('beforeunload', () => {
