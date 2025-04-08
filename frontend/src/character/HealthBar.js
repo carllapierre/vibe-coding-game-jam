@@ -73,7 +73,12 @@ export class HealthBar {
    * @param {number} maxHealth - Maximum health value
    */
   draw(currentHealth, maxHealth) {
-    if (!this.context) return;
+    if (!this.context) {
+      console.log("[HEALTH DEBUG] Cannot draw health bar: context missing");
+      return;
+    }
+    
+    console.log(`[HEALTH DEBUG] Drawing health bar: ${currentHealth}/${maxHealth}`);
     
     // Store health values
     this.currentHealth = currentHealth;
@@ -113,6 +118,8 @@ export class HealthBar {
     if (this.texture) {
       this.texture.needsUpdate = true;
     }
+    
+    console.log(`[HEALTH DEBUG] Health bar drawn with width: ${barWidth}px (${healthPercentage * 100}%)`);
   }
   
   /**
@@ -122,6 +129,8 @@ export class HealthBar {
    * @param {boolean} showHitEffect - Whether to show a hit effect
    */
   update(currentHealth, maxHealth = this.maxHealth, showHitEffect = false) {
+    console.log(`[HEALTH DEBUG] Update called: ${currentHealth}/${maxHealth} (current: ${this.currentHealth}/${this.maxHealth})`);
+    
     const healthChanged = currentHealth !== this.currentHealth || maxHealth !== this.maxHealth;
     
     if (healthChanged) {
@@ -133,8 +142,11 @@ export class HealthBar {
       
       // Show hit effect if requested or if health decreased
       if (showHitEffect || (previousHealth > currentHealth)) {
+        console.log(`[HEALTH DEBUG] Showing hit effect due to health decrease: ${previousHealth} -> ${currentHealth}`);
         this.showHitEffect();
       }
+    } else {
+      console.log(`[HEALTH DEBUG] Health unchanged, skipping redraw`);
     }
   }
   

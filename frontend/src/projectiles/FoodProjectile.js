@@ -425,17 +425,16 @@ export class FoodProjectile {
      * @returns {boolean} true if collision occurred
      */
     checkCollisions() {
-        // Skip if no collidable objects or collision disabled or model not loaded
-        if (!this.active || !this.modelLoaded || !this.model || 
+        // Skip if no collidable objects or collision disabled
+        if (!this.active || !this.model || 
             !FoodProjectile.collidableObjects || FoodProjectile.collidableObjects.length === 0) {
             return false;
         }
         
-        // Create a sphere for collision detection
-        const projectileSphere = new THREE.Sphere(this.model.position, this.collisionRadius);
-        
-        // We need to rotate the trajectory direction based on the initial direction
-        const collisionVelocity = this.velocity.clone();
+        // Create a slightly larger sphere for more reliable collision detection
+        // This helps catch hits near the edges of hitboxes
+        const reliableCollisionRadius = this.collisionRadius * 1.2; // 20% larger for better hit detection
+        const projectileSphere = new THREE.Sphere(this.model.position, reliableCollisionRadius);
         
         // Check against all collidable objects
         for (const collidable of FoodProjectile.collidableObjects) {
@@ -445,57 +444,30 @@ export class FoodProjectile {
             // Skip collision with own player if this is the player's projectile
             if (this.isOwnProjectile && collidable.isLocalPlayer) continue;
             
-            // First do a quick bounding box check
-            if (!collidable.box.intersectsSphere(projectileSphere)) {
-                continue;
-            }
-            
-            // Then do more detailed mesh checks if meshes are available
-            if (collidable.meshes && collidable.meshes.length > 0) {
-                const collided = collidable.meshes.some(mesh => {
-                    if (!mesh) return false;
-                    
-                    // Create ray pointing in the direction of travel
-                    const raycaster = new THREE.Raycaster();
-                    const rayOrigin = this.model.position.clone().sub(collisionVelocity.clone().multiplyScalar(0.2));
-                    raycaster.set(rayOrigin, collisionVelocity.normalize());
-                    
-                    // Check for intersection
-                    const intersects = raycaster.intersectObject(mesh);
-                    return intersects.length > 0 && intersects[0].distance < this.collisionRadius * 2;
-                });
-                
-                if (collided) {
-                    if (FoodProjectile.DEBUG) console.log(`Collision detected with: ${collidable.type}${collidable.isLocalPlayer ? ' (local player)' : ''}`);
-                    
-                    // For networked projectiles hitting local player, apply damage via handleHit callback
-                    if (this.isNetworked && collidable.isLocalPlayer && collidable.handleHit) {
-                        collidable.handleHit(this.damage);
-                    }
-                    
-                    // Pass all necessary item data including isOwnProjectile flag
-                    if (this.onCollision) {
-                        this.onCollision(collidable, {
-                            id: this.itemType,
-                            damage: this.damage,
-                            scale: this.scale,
-                            isOwnProjectile: this.isOwnProjectile,
-                            isNetworked: this.isNetworked
-                        });
-                    }
-                    
-                    // Create hit effect at the collision point
-                    this.createHitEffect(collidable);
-                    
-                    return true;
-                }
-            } else {
-                // No meshes to check, just use the box - this is a simplification for performance
-                if (FoodProjectile.DEBUG) console.log(`Simple box collision with: ${collidable.type}${collidable.isLocalPlayer ? ' (local player)' : ''}`);
+            // Quick bounding box check only - more reliable and performant
+            if (collidable.box.intersectsSphere(projectileSphere)) {
+                if (FoodProjectile.DEBUG) console.log(`Collision detected with: ${collidable.type}${collidable.isLocalPlayer ? ' (local player)' : ''}`);
                 
                 // For networked projectiles hitting local player, apply damage via handleHit callback
                 if (this.isNetworked && collidable.isLocalPlayer && collidable.handleHit) {
                     collidable.handleHit(this.damage);
+                }
+                
+                // Always ensure we have a targetPlayerId for player objects
+                if (collidable.type === 'player') {
+                    // First try to get ID from the property, then from the player object itself
+                    if (!collidable.targetPlayerId) {
+                        if (collidable.sessionId) {
+                            collidable.targetPlayerId = collidable.sessionId;
+                        } else if (collidable.player && collidable.player.sessionId) {
+                            collidable.targetPlayerId = collidable.player.sessionId;
+                        }
+                    }
+                    
+                    // Log warning if we still don't have a target ID
+                    if (!collidable.targetPlayerId) {
+                        console.warn('Hit detected but no targetPlayerId found on collidable:', collidable);
+                    }
                 }
                 
                 // Pass all necessary item data including isOwnProjectile flag

@@ -398,27 +398,37 @@ export class NetworkedPlayer {
    * @param {boolean} showHitEffect - Whether to show a hit effect
    */
   updateHealthBar(showHitEffect = false) {
-    if (!this.healthBar) return;
+    if (!this.healthBar) {
+      console.log(`[HEALTH DEBUG] Cannot update health bar for player ${this.sessionId}: healthBar doesn't exist`);
+      return;
+    }
     
     // Get current health values from player data
     const currentHealth = this.playerData.health !== undefined ? this.playerData.health : this.health;
     
+    console.log(`[HEALTH DEBUG] Updating health bar for player ${this.sessionId}: ${currentHealth}/${this.maxHealth}`);
+    
     if (this.model) {
       // If the health bar hasn't been created yet, create it
       if (!this.healthBar.sprite) {
+        console.log(`[HEALTH DEBUG] Creating new health bar sprite for player ${this.sessionId}`);
         this.healthBar.create(this.model, currentHealth, this.maxHealth);
       } else {
         // Immediate texture update for faster visual feedback
+        console.log(`[HEALTH DEBUG] Updating existing health bar for player ${this.sessionId}`);
         this.healthBar.draw(currentHealth, this.maxHealth);
         
         // Then trigger the animation effect if needed
         if (showHitEffect) {
+          console.log(`[HEALTH DEBUG] Showing hit effect on health bar for player ${this.sessionId}`);
           this.healthBar.showHitEffect();
         }
       }
       
       // Store current health
       this.health = currentHealth;
+    } else {
+      console.log(`[HEALTH DEBUG] Cannot update health bar for player ${this.sessionId}: model doesn't exist yet`);
     }
   }
   
@@ -448,8 +458,6 @@ export class NetworkedPlayer {
    */
   updateState(state) {
     try {
-      console.log('Player State:', state.state);
-
       // Calculate time since last update
       const now = Date.now();
       const timeDelta = (now - this.lastUpdateTime) / 1000; // in seconds
@@ -501,18 +509,19 @@ export class NetworkedPlayer {
         this.removeDeathMessage();
       }
       
-      // Update health if provided
-      if (state.health !== undefined && state.health !== this.health) {
-        const prevHealth = this.health;
+      // Update health if provided - ONLY update visuals with server values
+      if (state.health !== undefined) {
+        const prevHealth = this.health; 
+        this.health = state.health;
         this.playerData.health = state.health;
-        // Show hit effect if health decreased
+        
+        // Only show hit effect if health decreased
         const showHitEffect = state.health < prevHealth;
+        
+        // Update health bar with server-provided value
         this.updateHealthBar(showHitEffect);
         
-        // Check for death transition (health reached 0)
-        if (state.health <= 0 && prevHealth > 0) {
-          this.triggerDeath();
-        }
+        console.log(`NetworkedPlayer ${this.sessionId} health updated: ${prevHealth} -> ${state.health}`);
       }
       
       // Add to position buffer for smoothing
@@ -723,15 +732,32 @@ export class NetworkedPlayer {
    * @returns {Object} Object with box and meshes properties
    */
   getCollisionBox() {
-    if (!this.boxMesh) return null;
+    // Always return a collision box even if boxMesh isn't ready
+    // Create a fixed size box at the player's known position
+    const position = this.currentPosition || new THREE.Vector3();
     
+    // Create a box with slightly wider dimensions for more reliable hit detection
+    // We're adding a bit of margin to ensure hits are detected even at the edges
+    const width = 2.0;  // Slightly wider than 1.8
+    const height = 3.0;
+    const depth = 2.0;  // Slightly deeper than 1.8
+    
+    // Create a box centered at the player's position
+    const box = new THREE.Box3(
+      new THREE.Vector3(position.x - width/2, position.y, position.z - depth/2),
+      new THREE.Vector3(position.x + width/2, position.y + height, position.z + depth/2)
+    );
+    
+    // Always return a collision object even if there's no boxMesh
     return {
-      box: new THREE.Box3().setFromObject(this.boxMesh),
-      meshes: [this.boxMesh],
+      box: box,
+      meshes: this.boxMesh ? [this.boxMesh] : [],
       type: 'player',
       player: this,
       sessionId: this.sessionId,
-      position: this.model ? this.model.position : this.currentPosition
+      position: position,
+      // Add target player ID consistently for hit detection
+      targetPlayerId: this.sessionId
     };
   }
   
@@ -1255,8 +1281,10 @@ export class NetworkedPlayer {
   }
   
   /**
-   * Handle projectile collision with an object - since this needs to be fixed in Character.js, we should add a utility
-   * method in NetworkedPlayer to help handle hits more gracefully.
+   * Handle projectile collision with a remote player - visual effects only
+   * @param {number} damage - The amount of damage (for reference only)
+   * @param {string} itemType - Type of item that hit
+   * @returns {boolean} true if hit was accepted
    */
   handleProjectileHit(damage, itemType) {
     // Make sure we have a valid player ID
@@ -1265,56 +1293,37 @@ export class NetworkedPlayer {
       return false;
     }
     
-    // Now apply hit effect with animation
-    const now = Date.now();
-    
-    // Immediate visual health update - don't wait for server response
-    // Calculate estimated remaining health
-    const estimatedRemainingHealth = Math.max(0, this.health - damage);
-    
-    // Store the predicted damage amount for reconciliation
-    this.lastHitTime = now;
+    // Store hit time for reference
+    this.lastHitTime = Date.now();
     this.lastHitDamage = damage;
     
-    // Force an immediate health bar update with the hit effect
-    this.updateState({
-      health: estimatedRemainingHealth,
-      x: this.currentPosition.x,
-      y: this.currentPosition.y,
-      z: this.currentPosition.z,
-      rotationY: this.currentRotationY,
-      name: this.playerData.name,
-      state: this.playerState
-    });
+    // Show hit effect on health bar
+    if (this.healthBar) {
+      this.healthBar.showHitEffect();
+    }
     
     // Play hit sound at this player's position
     if (window.mainCamera && AudioManager) {
       try {
         // Get local player position as the listener
-        const listener = window.mainCamera.position.clone(); // Make sure to clone to avoid reference issues
+        const listener = window.mainCamera.position.clone();
         
         // Use this player's position as the source
-        const source = this.currentPosition.clone(); // Clone to avoid reference issues
+        const source = this.currentPosition.clone();
         
-        // For extreme clarity, use console to show positions
-        console.log("%c[HIT SOUND POSITIONS]", "background: #ff0000; color: white; font-size: 16px;");
-        console.log("Player hit position:", {x: source.x, y: source.y, z: source.z});
-        console.log("Camera/listener position:", {x: listener.x, y: listener.y, z: listener.z});
-        
-        // Apply SUPER extreme audio settings for testing
+        // Play spatial audio for hit
         AudioManager.playSpatial('hit', source, listener, {
-          maxDistance: 20,              // Shorter distance for more noticeable falloff
-          minDistance: 1,               // Only full volume when very close
-          volumeMultiplier: 1.5,        // Boost volume for testing
-          pitchMin: 0.4,                // Extremely low pitch possible
-          pitchMax: 1.6,                // Extremely high pitch possible
-          allowOverlap: true            // Allow sounds to overlap
+          maxDistance: 20,
+          minDistance: 1,
+          volumeMultiplier: 1.5,
+          pitchMin: 0.4,
+          pitchMax: 1.6,
+          allowOverlap: true
         });
       } catch (error) {
         console.warn('Unable to play hit sound:', error);
       }
     }
-  
     
     return true;
   }
@@ -1380,6 +1389,30 @@ export class NetworkedPlayer {
     } catch (error) {
       console.error('Error creating networked projectile:', error);
       return null;
+    }
+  }
+  
+  /**
+   * Force update the player's health bar
+   * @param {number} health - The health value to display
+   */
+  forceHealthUpdate(health) {
+    console.log(`[HEALTH DEBUG] Force updating health for player ${this.sessionId} to ${health}`);
+    
+    // Set health values
+    this.health = health;
+    this.playerData.health = health;
+    
+    // Force health bar update with hit effect
+    if (this.healthBar) {
+      if (this.healthBar.sprite) {
+        // Update using lower-level draw method for immediate effect
+        this.healthBar.draw(health, this.maxHealth);
+        this.healthBar.showHitEffect();
+      } else if (this.model) {
+        // Try creating it if it doesn't exist yet
+        this.healthBar.create(this.model, health, this.maxHealth);
+      }
     }
   }
 }

@@ -498,52 +498,17 @@ export class NetworkManager {
       // If it's our player, we only want to handle server-initiated respawns
       // and ignore our own local respawn signals
       if (playerId === this.sessionId && this.localPlayer) {
-        // Only handle respawn from server if the server is sending a position
-        // // Otherwise, our local respawn timer is the source of truth
-        // if (position && this.localPlayer.isInDeathState) {
-        //   console.log("Server initiated respawn with position:", position);
-          
-        //   // Let local player handle the respawn timing
-        //   if (this.localPlayer.respawn) {
-        //     // Use setTimeout to ensure we don't interrupt any ongoing death animations
-        //     setTimeout(() => {
-        //       this.localPlayer.respawn();
-        //     }, 100);
-        //   }
-        // } else {
-        //   console.log("Ignoring respawn signal - using local respawn timing");
-        // }
+
       } 
       // If it's another player, update their health bar to 100%
       else {
         const player = this.playerManager.players.get(playerId);
         if (player) {
-          console.log(`Remote player ${playerId} respawned`);
-          
-          // Update player state to respawned with full health
-          // player.updateState({
-          //   health: 100,
-            // Include other state data to avoid overwriting it
-            // x: player.currentPosition.x,
-            // y: player.currentPosition.y, 
-            // z: player.currentPosition.z,
-            // rotationY: player.currentRotationY,
-            // name: player.playerData.name,
-            // state: 'idle' // Reset state to idle after respawn
-          //});
           
           // Force update the health bar
           player.playerData.health = 100;
           player.health = 100;
           player.updateHealthBar(false);
-          
-          // Make sure model is visible again
-          // if (player.model && !player.model.visible) {
-          //   player.model.visible = true;
-          // }
-          
-          // Remove any death message
-          // player.removeDeathMessage();
         }
       }
     } catch (error) {
@@ -557,25 +522,29 @@ export class NetworkManager {
    */
   onPlayerDamaged(data) {
     try {
-      const { targetId, sourceId, damage, remainingHealth, itemType } = data;
+      const { targetId, sourceId, damage, remainingHealth, itemType, hitId } = data;
       
-      console.log(`SERVER DAMAGE EVENT: target=${targetId}, source=${sourceId}, damage=${damage}, health=${remainingHealth}, item=${itemType || 'unknown'}`);
+      console.log(`[DAMAGE DEBUG] Received damage event: ID: ${hitId}, Target: ${targetId}, Source: ${sourceId}, Damage: ${damage}, RemainingHealth: ${remainingHealth}`);
       
       // If we're the target, update our health
       if (targetId === this.sessionId) {
+        console.log(`[DAMAGE DEBUG] I am the target! Current health: ${this.localPlayer?.healthManager?.currentHealth}`);
+        
         if (this.localPlayer && this.localPlayer.healthManager) {
           // If player is already in death state, don't update health
           if (this.localPlayer.isInDeathState) {
-            console.log("Player already in death state, ignoring health update");
+            console.log("[DAMAGE DEBUG] Already in death state, ignoring health update");
           } else {
             // Apply the server's authority on health value
+            console.log(`[DAMAGE DEBUG] Updating local health to ${remainingHealth}`);
             this.localPlayer.healthManager.setHealth(remainingHealth);
             
-            // Visual effects for taking damage
+            // Visual effects for taking damage (in case we missed the hit effect)
             this.showDamageEffect();
             
             // If health is zero, trigger death state with appropriate death message
             if (remainingHealth <= 0 && this.localPlayer.setDeathState) {
+              console.log("[DAMAGE DEBUG] Health is zero, triggering death state");
               // Get the item type that killed the player for a customized message
               const killerWeapon = itemType || 'tomato';
               const killerName = this.getPlayerNameById(sourceId) || 'Someone';
@@ -584,43 +553,60 @@ export class NetworkManager {
               this.localPlayer.setDeathState(killerName, killerWeapon, sourceId);
             }
           }
+        } else {
+          console.log("[DAMAGE DEBUG] Cannot update health: localPlayer or healthManager is null");
         }
-        
-        console.log(`You were hit for ${damage} damage! Health: ${remainingHealth}`);
       } 
       // If it's another player, update their health in the player manager
       else {
         const targetPlayer = this.playerManager.players.get(targetId);
         if (targetPlayer) {
-          console.log(`Updating player ${targetId} health to ${remainingHealth}`);
+          console.log(`[DAMAGE DEBUG] Updating remote player ${targetId} health from ${targetPlayer.health} to ${remainingHealth}`);
           
-          // Don't update health for players in death state (isDead)
-          if (targetPlayer.isDead && remainingHealth > 0) {
-            console.log(`Player ${targetId} is in death state, ignoring health update`);
+          // Always forcefully update health
+          if (typeof targetPlayer.forceHealthUpdate === 'function') {
+            // Use the new force update method for reliable health bar updates
+            targetPlayer.forceHealthUpdate(remainingHealth);
           } else {
-            // Update with server values
-            targetPlayer.updateState({
-              health: remainingHealth,
-              // Include other state data to avoid overwriting it
-              x: targetPlayer.currentPosition.x,
-              y: targetPlayer.currentPosition.y, 
-              z: targetPlayer.currentPosition.z,
-              rotationY: targetPlayer.currentRotationY,
-              name: targetPlayer.playerData.name,
-              state: remainingHealth <= 0 ? 'death' : 'hit' // Set state based on health
-            });
-            
-            // Show hit effect
-            if (targetPlayer.healthBar) {
-              targetPlayer.healthBar.showHitEffect();
+            // Fallback to direct property setting
+            targetPlayer.health = remainingHealth;
+            targetPlayer.playerData.health = remainingHealth;
+            targetPlayer.updateHealthBar(true);
+          }
+          
+          // Don't update health for players in death state (isDead) but do allow resurrections
+          if (targetPlayer.isDead && remainingHealth > 0) {
+            console.log(`[DAMAGE DEBUG] Player ${targetId} is resurrecting`);
+            targetPlayer.isDead = false;
+            if (targetPlayer.model) {
+              targetPlayer.model.visible = true;
             }
           }
+          
+          // Update with server values, including health
+          targetPlayer.updateState({
+            health: remainingHealth,
+            x: targetPlayer.currentPosition.x,
+            y: targetPlayer.currentPosition.y, 
+            z: targetPlayer.currentPosition.z,
+            rotationY: targetPlayer.currentRotationY,
+            name: targetPlayer.playerData.name,
+            state: remainingHealth <= 0 ? 'death' : 'hit'
+          });
+          
+          // If health reaches 0, trigger death
+          if (remainingHealth <= 0 && !targetPlayer.isDead) {
+            console.log(`[DAMAGE DEBUG] Player ${targetId} health is zero, triggering death`);
+            targetPlayer.triggerDeath();
+          }
+        } else {
+          console.log(`[DAMAGE DEBUG] Cannot update health: Remote player ${targetId} not found`);
         }
       }
       
       // If we're the source, show hit confirmation
       if (sourceId === this.sessionId) {
-        console.log(`Server confirmed your hit on player ${targetId} for ${damage} damage!`);
+        console.log(`[DAMAGE DEBUG] I am the source! Hit confirmed on player ${targetId} for ${damage} damage!`);
         this.showHitMarker();
       }
     } catch (error) {
@@ -752,7 +738,6 @@ export class NetworkManager {
       this.isConnected = false;
       this.sessionId = null;
       
-      console.log('NetworkManager disposed');
     } catch (error) {
       console.error('Error disposing NetworkManager:', error);
     }
@@ -782,15 +767,12 @@ export class NetworkManager {
         sourceId: this.sessionId  // We are the source
       });
       
-      console.log(`Sent hit report to server - target: ${data.targetPlayerId}, damage: ${data.damage}`);
-      
       // Show hit marker UI immediately
       this.showHitMarker();
       
       // Play hit sound for the thrower
       try {
         if (AudioManager) {
-          console.log('[AUDIO] Playing hit confirmation sound for network hit');
           AudioManager.play('hit', { 
             volume: 0.7,
             pitchMin: 0.7,
@@ -816,8 +798,6 @@ export class NetworkManager {
     if (!this.isConnected || !killerId) return;
     
     try {
-      console.log(`Sending kill attribution: ${killerId} got a kill`);
-      
       // Send kill data to server
       this.colyseusManager.room.send('killAttribution', {
         killerId: killerId

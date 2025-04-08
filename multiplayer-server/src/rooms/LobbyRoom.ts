@@ -107,34 +107,41 @@ export class LobbyRoom extends Room<LobbyState> {
     
     this.onMessage("playerHit", (client, message) => {
       const { targetId, damage, itemType, sourceId } = message;
+      
+      console.log(`[HIT DEBUG] Source: ${sourceId || client.sessionId}, Target: ${targetId}, Damage: ${damage}, Item: ${itemType}`);
+      
       const targetPlayer = this.state.players.get(targetId);
       const sourcePlayer = this.state.players.get(sourceId || client.sessionId);
       
       if (!targetPlayer || !sourcePlayer) {
-        console.log(`Invalid players for hit: source=${sourceId}, target=${targetId}`);
+        console.log(`[HIT ERROR] Invalid players for hit: source=${sourceId || client.sessionId}, target=${targetId}`);
         return;
       }
       
-      console.log(`Processing hit: ${sourceId} -> ${targetId} for ${damage} damage with ${itemType}`);
+      console.log(`[HIT DEBUG] Target current health: ${targetPlayer.health}`);
       
       // Generate a unique hit ID for tracking
       const hitId = `hit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
+      // Store previous health for validation
+      const prevHealth = targetPlayer.health;
+      
       // Update target player's health
       targetPlayer.health = Math.max(0, targetPlayer.health - damage);
-      console.log(`${targetId}'s health reduced to ${targetPlayer.health}`);
+      
+      console.log(`[HIT DEBUG] Health change: ${prevHealth} -> ${targetPlayer.health} (change: ${prevHealth - targetPlayer.health})`);
       
       // If player health is depleted
       if (targetPlayer.health <= 0) {
-        // Don't increment score here, it will be handled by killAttribution
-        // Schedule respawn
+        console.log(`[HIT DEBUG] Player ${targetId} died! Scheduling respawn`);
         this.respawnPlayer(targetPlayer);
       }
       
       // Broadcast damage event to ALL clients including the target and source
       // This ensures synchronization across all clients
+      console.log(`[HIT DEBUG] Broadcasting playerDamaged event to all clients`);
       this.broadcast("playerDamaged", {
-        hitId: hitId, // Add unique ID for deduplication
+        hitId: hitId,
         targetId: targetId,
         sourceId: sourceId || client.sessionId,
         damage: damage,
@@ -143,18 +150,7 @@ export class LobbyRoom extends Room<LobbyState> {
         timestamp: Date.now()
       });
       
-      // Send a direct message to the target player to ensure they get the hit
-      // This helps with reliable delivery of hit events
-      const targetClient = this.clients.find(c => c.sessionId === targetId);
-      if (targetClient) {
-        targetClient.send("playerHit", {
-          hitId: hitId,
-          targetId: targetId,
-          sourceId: sourceId || client.sessionId,
-          damage: damage,
-          itemType: itemType
-        });
-      }
+      // Skip the extra direct message - let's simplify to just the broadcast
     });
     
     // Handle kill attribution from clients

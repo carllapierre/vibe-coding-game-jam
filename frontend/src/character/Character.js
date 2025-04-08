@@ -451,14 +451,24 @@ export class Character {
             }
             
             // Handle hit on remote player below (existing code)
-            const playerSessionId = collidedObject.sessionId;
+            const playerSessionId = collidedObject.sessionId || collidedObject.targetPlayerId;
             
-            // Get direct reference to player object
-            const player = collidedObject.player;
-            if (!player) {
-                console.warn('Cannot send hit: missing player reference');
+            if (!playerSessionId) {
+                console.warn('Cannot send hit: missing player session ID');
                 return;
             }
+            
+            // Get direct reference to player object - allow multiple ways to access player
+            const player = collidedObject.player || 
+                           (window.networkManager && window.networkManager.playerManager?.players.get(playerSessionId));
+            
+            if (!player) {
+                console.warn(`Cannot send hit: missing player reference for ID ${playerSessionId}`);
+                return;
+            }
+            
+            // Log successful hit detection for debugging
+            console.log(`[HIT DEBUG] Hit detected on player ${playerSessionId}`);
             
             // Check if we're still in cooldown for this player
             const now = Date.now();
@@ -505,12 +515,18 @@ export class Character {
             // Create hit effect on the player - more particles for consecutive hits
             this.createHitEffect(collidedObject, consecutiveHits);
             
-            // Use the new utility method to handle the hit directly on the NetworkedPlayer
-            const hitAccepted = player.handleProjectileHit(damage, itemConfig.id || 'tomato');
+            // Always assume the hit is accepted - for more reliable hit detection
+            let hitAccepted = true;
+            
+            // Use the new utility method to handle the hit directly on the NetworkedPlayer if available
+            if (typeof player.handleProjectileHit === 'function') {
+                player.handleProjectileHit(damage, itemConfig.id || 'tomato');
+            }
             
             // Only send to server if the hit was accepted by the player object
             if (hitAccepted && window.networkManager && window.networkManager.isConnected) {
                 try {
+                    console.log(`[HIT DEBUG] Sending hit to server for player ${playerSessionId}, damage: ${damage}`);
                     window.networkManager.sendPlayerHit({
                         targetPlayerId: playerSessionId,
                         damage: damage,
