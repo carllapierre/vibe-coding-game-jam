@@ -86,7 +86,7 @@ export class ItemRegistry extends Registry {
         { id: 'soda-bottle', model: 'soda-bottle.glb', scale: 0.7, damage: 16 },
         { id: 'soda-can', model: 'soda-can.glb', scale: 0.5, damage: 10 },
         { id: 'soda-glass', model: 'soda-glass.glb', scale: 0.6, damage: 12 },
-        { id: 'cup-coffee', model: 'cup-coffee.glb', scale: 1, damage: 15 },
+        { id: 'cup-coffee', model: 'cup-coffee.glb', scale: 1, damage: 15, effect: { id: 'speed', duration: 5000, config: { multiplier: 1.8 } } },
         { id: 'beer-barrel', model: 'barrel.glb', scale: 0.8, damage: 50 },
 
         // Condiments

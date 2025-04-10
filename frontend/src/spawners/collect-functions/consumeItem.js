@@ -6,6 +6,10 @@ export const consumeItem = (player, item) => {
         const hpBonus = item.hpBonus !== undefined ? item.hpBonus : 100;
         player.healthManager.addHealth(hpBonus);
     }
+
+    if (player.effectsManager && item.effect) {
+        player.effectsManager.apply(item.effect, item.id);
+    }
     
     // Start consume animation
     player.isConsumeAnimating = true;

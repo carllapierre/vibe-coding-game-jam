@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { assetPath } from '../utils/pathHelper.js';
 import sharedRenderer from '../utils/SharedRenderer.js';
+import { Effects } from '../character/effects/Effects.js'; // Import Effects map
+import { EffectsDisplay } from './EffectsDisplay.js'; // Import EffectsDisplay
 
 export class Hotbar {
-    constructor(inventory, _itemRegistry) {
+    constructor(inventory, itemRegistry, effectsManager) {
         this.inventory = inventory;
-        this.itemRegistry = _itemRegistry;
+        this.itemRegistry = itemRegistry;
+        this.effectsManager = effectsManager;
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
         this.slotModels = new Array(9).fill(null);  // Store models for each slot
@@ -25,10 +28,20 @@ export class Hotbar {
         // Now that UI is fully initialized, register for amount updates
         this.inventory.setAmountChangeCallback((index, amount) => {
             this.updateSlot(index);
+            if (index === this.inventory.selectedSlot) {
+                this.updateItemDisplay();
+            }
         });
         
         // Perform initial UI update
         this.update();
+
+        // Initialize EffectsDisplay
+        if (this.effectsManager) {
+            this.effectsDisplay = new EffectsDisplay(this.effectsManager, this);
+        } else {
+            console.warn("Hotbar: EffectsManager not provided, EffectsDisplay will not be created.");
+        }
     }
 
     // Format item name from ID (remove hyphens, capitalize first letters)
@@ -113,27 +126,28 @@ export class Hotbar {
             border-radius: 12px;
         `;
 
-        // Create damage value display
-        this.damageDisplay = document.createElement('div');
-        this.damageDisplay.style.cssText = `
+        // Create icon/label display (e.g., for Effect or Damage)
+        this.infoLabel = document.createElement('div');
+        this.infoLabel.style.cssText = `
+            font-size: 14px;
+            color: #ffffffcc;
+            text-shadow: 0px 0px 3px rgba(0, 0, 0, 0.7);
+        `;
+        damageContainer.appendChild(this.infoLabel);
+
+        // Create info value display (for effect description or damage value)
+        this.infoDisplay = document.createElement('div');
+        this.infoDisplay.style.cssText = `
             font-size: 16px;
             font-weight: bold;
             color: #fff;
             text-shadow: 0px 0px 4px rgba(0, 0, 0, 0.7);
         `;
-        damageContainer.appendChild(this.damageDisplay);
+        damageContainer.appendChild(this.infoDisplay);
         
-        // Add DMG text
-        const dmgText = document.createElement('div');
-        dmgText.textContent = 'DMG';
-        dmgText.style.cssText = `
-            font-size: 14px;
-            color: #ffffffcc;
-            text-shadow: 0px 0px 3px rgba(0, 0, 0, 0.7);
-        `;
-        damageContainer.appendChild(dmgText);
-        
-        this.itemDisplay.appendChild(damageContainer);
+        // Keep the container itself, rename related variables
+        this.infoContainer = damageContainer; 
+        this.itemDisplay.appendChild(this.infoContainer);
 
         document.body.appendChild(this.itemDisplay);
         
@@ -143,7 +157,8 @@ export class Hotbar {
 
     updateItemDisplay() {
         // Safety check - make sure the item display elements exist
-        if (!this.itemPreviewImg || !this.itemNameDisplay || !this.damageDisplay) {
+        if (!this.itemPreviewImg || !this.itemNameDisplay || !this.infoDisplay || !this.infoLabel || !this.infoContainer) {
+            console.warn("Hotbar UI elements not fully initialized for updateItemDisplay.");
             return;
         }
         
@@ -203,19 +218,40 @@ export class Hotbar {
             this.getItemImage(itemData.item).then(dataUrl => {
                 this.itemPreviewImg.src = dataUrl;
                 this.itemPreviewImg.style.display = 'block';
-            });
+            }).catch(error => {
+                 console.error(`Error loading image for item ${itemData.item}:`, error);
+                 this.itemPreviewImg.style.display = 'none'; // Hide if loading failed
+             });
             
-            // Get item config to access damage
+            // Get item config to access damage and effect
             const itemConfig = this.itemRegistry.getType(itemData.item);
             
             // Update name
             this.itemNameDisplay.textContent = this.formatItemName(itemData.item);
             
-            // Update damage
-            if (itemConfig && itemConfig.damage !== undefined) {
-                this.damageDisplay.textContent = itemConfig.damage;
-            } else {
-                this.damageDisplay.textContent = '-';
+            // Update info section (Effect > Damage)
+            let infoSet = false;
+            if (itemConfig && itemConfig.effect) {
+                const EffectClass = Effects[itemConfig.effect.id]; // Lookup in the Effects map
+                if (EffectClass && EffectClass.description) {
+                    this.infoLabel.textContent = ""; // Or use an icon
+                    this.infoDisplay.textContent = EffectClass.description +'!';
+                    this.infoContainer.style.display = 'flex';
+                    infoSet = true;
+                }
+            }
+
+            // If no effect info was set, fall back to damage
+            if (!infoSet && itemConfig && itemConfig.damage !== undefined && itemConfig.damage > 0) {
+                 this.infoLabel.textContent = "DMG:";
+                 this.infoDisplay.textContent = itemConfig.damage;
+                 this.infoContainer.style.display = 'flex';
+                 infoSet = true;
+            }
+            
+            // If neither effect nor damage info was set, hide the container
+            if (!infoSet) {
+                 this.infoContainer.style.display = 'none';
             }
         } else {
             // Hide display when no item is selected
@@ -475,6 +511,11 @@ export class Hotbar {
         for (let i = 0; i < slots.length; i++) {
             this.updateSlot(i);
         }
+
+        // Update the effects display
+        if (this.effectsDisplay) {
+            this.effectsDisplay.update();
+        }
     }
     
     // Clean up resources
@@ -494,6 +535,11 @@ export class Hotbar {
             this.itemDisplay.parentNode.removeChild(this.itemDisplay);
         }
         
+        // Dispose EffectsDisplay if it exists
+        if (this.effectsDisplay) {
+            this.effectsDisplay.dispose();
+        }
+
         this.slotPreviewScenes = [];
         this.slotPreviewCameras = [];
         this.slotImages = [];

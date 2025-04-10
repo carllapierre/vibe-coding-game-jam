@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FoodProjectile } from '../projectiles/FoodProjectile.js';
-import { api, character } from '../config.js';
+import { character } from '../config.js';
 import assetManager from '../utils/AssetManager.js';
 import { AudioManager } from '../audio/AudioManager.js';
+import { EffectsManager } from './EffectsManager.js'; // Import EffectsManager
 
 // Health Manager class for handling character health
 class HealthManager {
@@ -117,6 +117,9 @@ export class Character {
         
         // Initialize health manager with reference to this character
         this.healthManager = new HealthManager(100, this);
+        
+        // Initialize effects manager
+        this.effectsManager = new EffectsManager(this);
         
         // Player state tracking
         this.playerState = 'idle';
@@ -360,8 +363,6 @@ export class Character {
             // Use custom onRightClick function if it exists, otherwise use the default consume behavior
             if (itemConfig.onRightClick) {
                 itemConfig.onRightClick(this, itemConfig);
-            } else {
-                this.consumeItem(itemConfig);
             }
         }
     }
@@ -650,38 +651,6 @@ export class Character {
      */
     setNetworkedPlayers(players) {
         this.networkedPlayers = players;
-    }
-
-    // Default consume method
-    consumeItem(itemConfig) {
-        // Get default or custom health bonus
-        const hpBonus = itemConfig.hpBonus !== undefined ? itemConfig.hpBonus : 100;
-        
-        // Add health and ensure the UI updates
-        if (this.healthManager) {
-            this.healthManager.addHealth(hpBonus);
-        }
-        
-        // Start consume animation - always do this BEFORE consuming the item
-        this.isConsumeAnimating = true;
-        this.consumeAnimationStartTime = Date.now();
-        
-        // Important: For the last item in a stack, make sure we have a valid model
-        // to animate with, even after the item is removed from inventory
-        const isLastItem = this.inventory.getSelectedSlot().amount === 1;
-        
-        // If this is the last item, make sure the model is fully loaded before consuming
-        if (isLastItem && !this.previewModel) {
-            this.updatePreviewModel();
-            // Add a small delay before consuming the item to let the model load
-            setTimeout(() => {
-                this.inventory.consumeSelectedItem();
-            }, 50);
-            return true; // Consider it consumed successfully
-        }
-        
-        // For all other cases, consume immediately
-        return this.inventory.consumeSelectedItem();
     }
 
     /**
@@ -978,6 +947,9 @@ export class Character {
         
         // Now handle animations
         this.updateHandAnimations();
+
+        // Update effects manager
+        this.effectsManager.update(); // Pass deltaTime if needed by any effects
     }
 
     // Split physics from input-based movement
@@ -2080,5 +2052,21 @@ export class Character {
                 window.networkManager.sendPlayerState(this.playerState);
             }
         }
+    }
+
+    /**
+     * Get base move speed (used by effects).
+     * @returns {number} The current base move speed.
+     */
+    getBaseSpeed() {
+        return this.moveSpeed;
+    }
+
+    /**
+     * Set base move speed (used by effects).
+     * @param {number} newSpeed - The new base move speed.
+     */
+    setBaseSpeed(newSpeed) {
+        this.moveSpeed = newSpeed;
     }
 } 

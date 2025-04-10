@@ -200,8 +200,12 @@ characterViewContainer.appendChild(crosshair);
 
 // Initialize inventory system
 const inventory = new Inventory();
-const hotbar = new Hotbar(inventory, ItemRegistry);
+let collidableObjects = [];
+// Initialize character
+const character = new Character(scene, camera, collidableObjects, ItemRegistry);
 
+// NOW initialize Hotbar, since character and its effectsManager exist
+const hotbar = new Hotbar(inventory, ItemRegistry, character.effectsManager);
 characterViewContainer.appendChild(hotbar.container);
 
 // Setup item properties and functions
@@ -260,13 +264,7 @@ SpawnableRegistry.updateSpawnableProperties(['beer-barrel'], {
 
 // 3. Initialize world manager (which now doesn't register items again)
 const worldManager = new WorldManager(scene);
-let collidableObjects = [];
 
-// Initialize character
-const character = new Character(scene, camera, collidableObjects, ItemRegistry);
-
-// Make character globally accessible for projectiles
-window.character = character;
 
 // Create debug manager
 const worldEditor = new EditorCore(scene, camera, renderer, character);
@@ -512,6 +510,9 @@ function frameStep(currentTime) {
 
     // Update world (including spawners and check for item collection)
     worldManager.update(character, camera);
+
+    // Update UI elements that need per-frame updates
+    hotbar.update();
 
     // Render with post-processing effects
     postProcessing.render();
