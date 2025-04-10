@@ -2069,4 +2069,20 @@ export class Character {
     setBaseSpeed(newSpeed) {
         this.moveSpeed = newSpeed;
     }
+
+    /**
+     * Get jump height (used by effects).
+     * @returns {number} The current jump force.
+     */
+    getJumpHeight() {
+        return this.jumpForce;
+    }
+
+    /**
+     * Set jump height (used by effects).
+     * @param {number} newJumpHeight - The new jump force.
+     */
+    setJumpHeight(newJumpHeight) {
+        this.jumpForce = newJumpHeight;
+    }
 } 

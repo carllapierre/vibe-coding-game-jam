@@ -1,12 +1,14 @@
 // Import specific effect classes
 import { SpeedEffect } from './SpeedEffect.js';
 import { SlowEffect } from './SlowEffect.js';
+import { JumpEffect } from './JumpEffect.js';
 
 // Export an object where keys are effect IDs and values are the effect classes
 // This allows easy lookup, for example, when loading effect configurations.
 export const Effects = {
     'speed': SpeedEffect,
     'slow': SlowEffect,
+    'jump': JumpEffect,
     // Add other effects here as they are created:
     // 'damageOverTime': DamageOverTimeEffect,
 };

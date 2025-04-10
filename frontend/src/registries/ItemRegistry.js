@@ -47,7 +47,7 @@ export class ItemRegistry extends Registry {
         { id: 'paprika', model: 'paprika.glb', scale: 0.5, damage: 10 },
         { id: 'paprika-slice', model: 'paprika-slice.glb', scale: 0.5, damage: 5 },
         { id: 'radish', model: 'radish.glb', scale: 0.4, damage: 7 },
-        { id: 'carrot', model: 'carrot.glb', scale: 0.8, damage: 15 },
+        { id: 'carrot', model: 'carrot.glb', scale: 0.8, damage: 15, effect: { id: 'jump', duration: 8000, config: { multiplier: 1.75 } } },
         
         // Prepared Foods
         { id: 'pizza', model: 'pizza.glb', scale: 0.7, damage: 22 },
