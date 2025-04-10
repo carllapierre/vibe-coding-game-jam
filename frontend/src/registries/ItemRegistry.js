@@ -76,8 +76,8 @@ export class ItemRegistry extends Registry {
         { id: 'popsicle', model: 'popsicle.glb', scale: 1, damage: 11 },
         { id: 'popsicle-chocolate', model: 'popsicle-chocolate.glb', scale: 0.5, damage: 10 },
         { id: 'whipped-cream', model: 'whipped-cream.glb', scale: 0.5, damage: 7 },
-        { id: 'honey', model: 'honey.glb', scale: 0.5, damage: 8 },
-        { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5, damage: 9 },
+        { id: 'honey', model: 'honey.glb', scale: 0.5, damage: 8, effect: { id: 'slow', duration: 5000 } },
+        { id: 'peanut-butter', model: 'peanut-butter.glb', scale: 0.5, damage: 9, effect: { id: 'slow', duration: 3000 } },
         { id: 'cake', model: 'cake.glb', scale: 1, damage: 30 },
         // Beverages
         { id: 'wine-red', model: 'wine-red.glb', scale: 0.8, damage: 18 },

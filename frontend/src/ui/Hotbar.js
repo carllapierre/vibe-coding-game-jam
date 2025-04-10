@@ -235,7 +235,7 @@ export class Hotbar {
                 const EffectClass = Effects[itemConfig.effect.id]; // Lookup in the Effects map
                 if (EffectClass && EffectClass.description) {
                     this.infoLabel.textContent = ""; // Or use an icon
-                    this.infoDisplay.textContent = EffectClass.description +'!';
+                    this.infoDisplay.textContent = EffectClass.description;
                     this.infoContainer.style.display = 'flex';
                     infoSet = true;
                 }
